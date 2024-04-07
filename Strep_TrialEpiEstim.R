@@ -18,14 +18,27 @@ setwd(wd)
 dat <- read_excel("pone.0203205.s001.xlsx") %>% 
   glimpse()
 
+sort(unique(dat$Latex))
+sort(unique(dat$Culture))
+sort(unique(dat$PCR))
+sort(unique(dat$Etiology))
+# See Etiology = SPN coz' others are mixture (HI, SPN, HI, etc), total should be 153
+sort(unique(dat$PCR_SpSerotype))
+
+dat <- dat %>% 
+  filter(Etiology == "SPN") %>% 
+  rename(Week = `Epi Week`,
+         Age_group = `Age group`) %>% 
+  glimpse()
+
 # 1. Notes about data: #########################################################
 # NO daily incidences, but weekly incidences available (constant aggregation)
 # SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
 
 # Crucial info:
 # $ Year
-# $ `Epi Week`
-# $ `Age group`
+# $ Week
+# $ Age_group
 # $ Pneumovac
 # $ PCR_SpSerotype
 
@@ -35,26 +48,45 @@ dat <- read_excel("pone.0203205.s001.xlsx") %>%
 
 # Incidence count per week
 dat_week <- dat %>% 
-  group_by(Year, `Epi Week`) %>% 
+  group_by(Year, Week) %>% 
   summarise(I_week = n()) %>% 
   ungroup() %>% 
-  # filter(!is.na(`Epi Week`)) %>% 
-  mutate(`Epi Week` = if_else(is.na(`Epi Week`), 0, `Epi Week`)) %>% 
+  arrange(Year, Week) %>% 
   glimpse()
 
 # Incidence count per week for Serotype 1
 dat_week_ST1 <- dat %>% 
   filter(PCR_SpSerotype == "1") %>% 
-  group_by(Year, `Epi Week`) %>% 
+  group_by(Year, Week) %>% 
   summarise(I_week = n()) %>% 
   ungroup() %>% 
-  # filter(!is.na(`Epi Week`)) %>% 
-  mutate(`Epi Week` = if_else(is.na(`Epi Week`), 0, `Epi Week`)) %>% 
+  # filter(!is.na(Week)) %>% # filtered because week unknown
+  # mutate(Week = if_else(is.na(Week), 0, Week)) %>% 
   glimpse()
+
+# Let's arrange the weeks
+library(lubridate)
+
+dates <- seq.Date(as.Date(paste0(2015, "-01-01")),
+                  as.Date(paste0(2017, "-12-31")),
+                  by = "week")
+
+new_dat <- data.frame(
+  Year = year(dates),
+  Week = week(dates)
+) %>% 
+  glimpse()
+
+new_datWeek <- left_join(new_dat, dat_week, by = c("Year", "Week"))
+new_datWeek <- new_datWeek %>% 
+  mutate(I_Week = if_else(is.na(I_week), 0, I_week)) %>% 
+  filter(I_week != 0) %>% 
+  glimpse()
+
 
 # Incidence viz per week (using library(incidence))
 # SOURCE: https://cran.r-project.org/web/packages/EpiEstim/vignettes/demo.html
-plot(as.incidence(dat_week$I_week, dates = dat_week$`Epi Week`))
+plot(as.incidence(new_datWeek$I_week, dates = new_datWeek$Week))
 
 # 2. The trials ################################################################
 # SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
@@ -83,7 +115,7 @@ config = make_config(list(mean_si = mean_SI,
                                # config = config)
 
 # Previously failed, estimate_R can run for weekly data:
-output <- EpiEstim::estimate_R(incid = dat_week$I_week, # change df to dat_week or dat_week_ST1
+output <- EpiEstim::estimate_R(incid = new_datWeek$I_week, # change df to dat_week or dat_week_ST1
                                dt = 7L,
                                dt_out = 7L,
                                iter = 10L, # 10L by default
