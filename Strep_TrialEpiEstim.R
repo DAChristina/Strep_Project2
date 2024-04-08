@@ -79,14 +79,15 @@ new_dat <- data.frame(
 
 new_datWeek <- left_join(new_dat, dat_week, by = c("Year", "Week"))
 new_datWeek <- new_datWeek %>% 
-  mutate(I_Week = if_else(is.na(I_week), 0, I_week)) %>% 
-  filter(I_week != 0) %>% 
+  mutate(I_week = if_else(is.na(I_week), 0, as.numeric(I_week)),
+         Row_numb = row_number()) %>% 
+  # filter(I_week != 0) %>% 
   glimpse()
 
 
 # Incidence viz per week (using library(incidence))
 # SOURCE: https://cran.r-project.org/web/packages/EpiEstim/vignettes/demo.html
-plot(as.incidence(new_datWeek$I_week, dates = new_datWeek$Week))
+plot(as.incidence(new_datWeek$I_week, dates = new_datWeek$Row_numb))
 
 # 2. The trials ################################################################
 # SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
