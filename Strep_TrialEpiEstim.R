@@ -89,20 +89,27 @@ new_datWeek <- new_datWeek %>%
   # filter(I_week != 0) %>% 
   glimpse()
 
+# For ST1
+new_datWeek_ST1 <- left_join(new_dat, dat_week_ST1, by = c("Year", "Week"))
+new_datWeek_ST1 <- new_datWeek_ST1 %>% 
+  mutate(I_week = if_else(is.na(I_week), 0, as.numeric(I_week)),
+         Row_numb = row_number()) %>% 
+  # filter(I_week != 0) %>% 
+  glimpse()
+
 
 # Incidence viz per week (using library(incidence))
 # SOURCE: https://cran.r-project.org/web/packages/EpiEstim/vignettes/demo.html
 
 # 1.1. Directly plot the incidence
-plot(as.incidence(new_datWeek$I_week, dates = new_datWeek$Day), # Or use dates = new_datWeek$Row_numb instead
+plot(as.incidence(new_datWeek_ST1$I_week, dates = new_datWeek$Day), # Or use dates = new_datWeek$Row_numb instead
      xlab = "Week number (1 Dec 2015 to 31 Mar 2017)",
-     ylab = "Weekly incidence")
+     ylab = "Weekly Incidence of Serotype 1")
 
 # 1.2. Or save the data as incidence (FAILED)
-SPN_incid <- as.incidence(new_datWeek$I_week, dates = new_datWeek$Day)
+SPN_incid <- as.incidence(new_datWeek_ST1$I_week, dates = new_datWeek_ST1$Day)
 
-plot(SPN_incid) %>%
-  add_projections(proj, c(0.025, 0.5, 0.975))
+plot(SPN_incid)
 
 # 2. The trials ################################################################
 # SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
@@ -131,7 +138,7 @@ config = make_config(list(mean_si = mean_SI,
 # config = config)
 
 # Previously failed, estimate_R can run for weekly data:
-output <- EpiEstim::estimate_R(incid = new_datWeek$I_week, # change df to dat_week or dat_week_ST1
+output <- EpiEstim::estimate_R(incid = new_datWeek_ST1$I_week, # change df to new_datWeek or new_datWeek_ST1
                                dt = 7L,
                                dt_out = 7L,
                                iter = 10L, # 10L by default
@@ -140,7 +147,8 @@ output <- EpiEstim::estimate_R(incid = new_datWeek$I_week, # change df to dat_we
                                method = "parametric_si",
                                config = config)
 
-plot(output, legend = F)
+plot(output, legend = F,
+     main = "The R(t) Estimation for Serotype 1 Incidence")
 
 
 # Forecast trial (data should be daily incidence)
@@ -188,6 +196,32 @@ plot(as.incidence(new_datWeek$I_week, dates = new_datWeek$Day), # Or use dates =
   add_projections(proj, c(0.025, 0.5, 0.975))
 
 
+# Trial MCMC to generate SI from data cannot be executed because there are no si_data
+# SOURCE: https://mrc-ide.github.io/EpiEstim/reference/Flu2009.html
+if (FALSE) {
+  ## Note the following examples use an MCMC routine
+  ## to estimate the serial interval distribution from data,
+  ## so they may take a few minutes to run
+  
+  ## estimate the reproduction number (method "si_from_data")
+  output_MCMC <- EpiEstim::estimate_R(incid = new_datWeek$I_week,
+                                      dt = 7L, # ???
+                                      method="si_from_data",
+                                      si_data = "???",
+                                      config = make_config(
+                                        list(mcmc_control = 
+                                               make_mcmc_control(list(
+                                                 burnin = 1000,
+                                                 thin = 10,
+                                                 seed = 1)),
+                                             n1 = 1000, n2 = 50,
+                                             si_parametric_distr = "G")))
+  
+  plot(output_MCMC, legend = F)
+  ## the second plot produced shows, at each each day,
+  ## the estimate of the reproduction number
+  ## over the 7-day window finishing on that day.
+}
 
 # Example using SIR model but deterministic:
 # https://www.kaggle.com/code/sunfinger/can-we-simply-predict-evolution-of-covid-19
