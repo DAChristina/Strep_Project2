@@ -11,6 +11,7 @@ if(!require(EpiEstim, quietly=T)){
 library(tidyverse)
 library(readxl)
 library(incidence)
+library(lubridate)
 
 wd = "C:/Users/dac23/Downloads"
 wd = "/home/ron/Downloads"
@@ -21,55 +22,10 @@ setwd(wd)
 dat <- read_excel("pone.0203205.s001.xlsx") %>% 
   glimpse()
 
-sort(unique(dat$Latex))
-sort(unique(dat$Culture))
-sort(unique(dat$PCR))
-sort(unique(dat$Etiology))
-# See Etiology = SPN coz' others are mixture (HI, SPN, HI, etc), total should be 153
-sort(unique(dat$PCR_SpSerotype))
-
 dat <- dat %>% 
-  filter(Etiology == "SPN") %>% 
   rename(Week = `Epi Week`,
          Age_group = `Age group`) %>% 
   glimpse()
-
-# 1. Notes about data: #########################################################
-# NO daily incidences, but weekly incidences available (constant aggregation)
-# SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
-
-# Crucial info:
-# $ Year
-# $ Week
-# $ Age_group
-# $ Pneumovac
-# $ PCR_SpSerotype
-
-# EpiEstim data required for estimate_R (based on > data("Flu2009")):
-# incidence (n per-day)
-# SI distribution (could be in separate df)
-
-# Incidence count per week
-dat_week <- dat %>% 
-  group_by(Year, Week) %>% 
-  summarise(I_week = n()) %>% 
-  ungroup() %>% 
-  arrange(Year, Week) %>% 
-  glimpse()
-
-# Incidence count per week for Serotype 1
-dat_week_ST1 <- dat %>% 
-  filter(PCR_SpSerotype == "1") %>% 
-  group_by(Year, Week) %>% 
-  summarise(I_week = n()) %>% 
-  ungroup() %>% 
-  # filter(!is.na(Week)) %>% # filtered because week unknown
-  # mutate(Week = if_else(is.na(Week), 0, Week)) %>% 
-  glimpse()
-
-
-# Let's arrange the weeks
-library(lubridate)
 
 dates <- seq.Date(as.Date(paste0(2015, "-12-01")),
                   by = "week",
@@ -82,36 +38,49 @@ new_dat <- data.frame(
 
 glimpse(new_dat)
 
-new_datWeek <- left_join(new_dat, dat_week, by = c("Year", "Week"))
-new_datWeek <- new_datWeek %>% 
-  mutate(I_week = if_else(is.na(I_week), 0, as.numeric(I_week)),
-         Row_numb = row_number()) %>% 
-  # filter(I_week != 0) %>% 
+new_datWeek <- left_join(dat, new_dat, by = c("Year", "Week"))
+
+# Filter to Strep PN only (new_datWeek is a mixture of HI, NM, other Streps)
+# See Etiology = SPN coz' others are mixture (HI, SPN, HI, etc), total should be 153
+dat_SPN <- new_datWeek %>% 
+  filter(Etiology == "SPN") %>% 
   glimpse()
 
-# For ST1
-new_datWeek_ST1 <- left_join(new_dat, dat_week_ST1, by = c("Year", "Week"))
-new_datWeek_ST1 <- new_datWeek_ST1 %>% 
-  mutate(I_week = if_else(is.na(I_week), 0, as.numeric(I_week)),
-         Row_numb = row_number()) %>% 
-  # filter(I_week != 0) %>% 
+# Specify to ST1 (total should be 85 cases)
+dat_ST1 <- new_datWeek %>% 
+  filter(PCR_SpSerotype == "1") %>% 
   glimpse()
 
+
+# 1. Notes about data: #########################################################
+# NO daily incidences, but weekly incidences available (constant aggregation)
+# SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
+
+# I have changed the data as originally as possible (1 row means 1 case)
+# Crucial info:
+# $ Day (also contains Year & Week)
+# $ Age_group
+# $ Pneumovac
+# $ PCR_SpSerotype
+
+# EpiEstim data required for estimate_R (based on > data("Flu2009")):
+# incidence (n per-day)
+# SI distribution (could be in separate df, data not available)
 
 # Incidence viz per week (using library(incidence))
 # SOURCE: https://cran.r-project.org/web/packages/EpiEstim/vignettes/demo.html
 
-# 1.1. Directly plot the incidence
-plot(as.incidence(new_datWeek_ST1$I_week, dates = new_datWeek$Day), # Or use dates = new_datWeek$Row_numb instead
+# 1.1. (not) Directly plot the incidence
+# SOURCE: https://www.repidemicsconsortium.org/incidence/
+dat_ST1_i7 <- incidence(dat_ST1$Day, interval = 7)
+# Unfortunately, 8 missing observations were removed (only year is known therefore Day is NA)
+
+# By using library(incidence)
+plot(dat_ST1_i7, # Or use dates = new_datWeek$Row_numb instead
      xlab = "Week number (1 Dec 2015 to 31 Mar 2017)",
      ylab = "Weekly Incidence of Serotype 1")
 
-# 1.2. Or save the data as incidence (FAILED)
-SPN_incid <- as.incidence(new_datWeek_ST1$I_week, dates = new_datWeek_ST1$Day)
-
-plot(SPN_incid)
-
-# 2. The trials ################################################################
+# 2. The EpiEstim trials #######################################################
 # SOURCE: https://mrc-ide.github.io/EpiEstim/articles/EpiEstim_aggregated_data.html
 
 # Serial interval (SI):
@@ -138,7 +107,7 @@ config = make_config(list(mean_si = mean_SI,
 # config = config)
 
 # Previously failed, estimate_R can run for weekly data:
-output <- EpiEstim::estimate_R(incid = new_datWeek_ST1$I_week, # change df to new_datWeek or new_datWeek_ST1
+output <- EpiEstim::estimate_R(incid = dat_ST1_i7$counts, # change df to new_datWeek or new_datWeek_ST1
                                dt = 7L,
                                dt_out = 7L,
                                iter = 10L, # 10L by default
