@@ -18,7 +18,8 @@ library(odin.dust)
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 # Running the SIR model with dust
 sir_model <- gen_sir$new(pars = list(dt = 1,
-                                     I0 = 1,
+                                     S_ini = 10000000,
+                                     I_ini = 12,
                                      beta = 0.1,
                                      sigma = 0.01),
                          time = 1,
