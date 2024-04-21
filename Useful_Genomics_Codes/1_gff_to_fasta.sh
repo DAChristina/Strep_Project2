@@ -1,6 +1,6 @@
 for file in *.gff; do
   name=${file%.gff} 
-  grep -A999999 "##FASTA" $file | grep -v "##FASTA" >> ./${name}.fasta
+  grep -A999999 "##FASTA" $file | grep -v "##FASTA" >> ./fa/${name}.fasta
 done
 
 
