@@ -1,4 +1,4 @@
-mkdir /fa
+mkdir fa
 
 for file in *.gff; do
   name=${file%.gff} 
