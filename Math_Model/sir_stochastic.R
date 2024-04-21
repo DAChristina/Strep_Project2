@@ -7,23 +7,26 @@ initial(time) <- 0
 update(time) <- (step + 1) * dt
 
 # 1. PARAMETERS ################################################################
-N <- S + I + R
-I0 <- user()
+S_ini <- user()
+I_ini <- user()
 beta <- user()
 sigma <- user()
 
 # 2. INITIAL VALUES ############################################################
-initial(S) <- N - I0
-initial(I) <- I0
+initial(S) <- S_ini
+initial(I) <- I_ini
 initial(R) <- 0
 
-
 # 3. UPDATES ###################################################################
+N <- S + I + R
+
+# Individual probabilities of transition
 p_SI <- 1 - exp(-beta * I / N)
 p_IR <- 1 - exp(-sigma)
 
-n_SI <- rnbinom(S, p_SI)
-n_IR <- rnbinom(I, p_IR)
+# Draws for numbers changing between compartments
+n_SI <- rbinom(S, p_SI)
+n_IR <- rbinom(I, p_IR)
 
 update(S) <- S - n_SI
 update(I) <- I + n_SI - n_IR
