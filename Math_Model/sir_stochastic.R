@@ -24,19 +24,20 @@ N <- S + I + R
 beta <- (R0*I)/(N*DOI)
 
 # Individual probabilities of transition
-p_SI <- 1- exp(-beta)
-p_IR <- 1- exp(-sigma)
+p_SI <- 1- exp(-beta * dt)
+p_IR <- 1- exp(-sigma * dt)
 
 # Draws for numbers changing between compartments
-temp_n_SI <- rnbinom(S, p_SI)
-temp_n_IR <- rnbinom(I, p_IR)
-# Error: Expected 2 arguments in rnbinom call, but recieved 3
-# temp_n_SI <- rnbinom(n=n_IR, mu = mu, size = kappa) # (line 30)
+temp_n_SI <- rbinom(S, p_SI) # contrasting to only rbinom(S, p_SI), need correction
+temp_n_IR <- rbinom(I, p_IR) # contrasting to only rbinom(I, p_IR), need correction
 # size is the overdispersion parameter k, smaller k -> greater variance
 # a check to ensure there are not more incident infections than susceptible individuals
 
-n_SI <- if (temp_n_SI > 0) temp_n_SI else 0 # Check if the result < 0, throw 0
-n_IR <- if (temp_n_IR > 0) temp_n_IR else 0 # Check if the result < 0, throw 0
+n_SI <- if (temp_n_IR > 0) sum(rnbinom(temp_n_SI, p_SI))  else 0 # Check if the result < 0, throw 0
+# Error: Expected 2 arguments in rnbinom call, but recieved 3
+# Error: Argument to sum must be a symbol or indexed array
+# sum(rnbinom(n=recovery, mu = R0*data$S[i-1]/N, size = k))
+n_IR <- temp_n_IR
 
 update(S) <- S - n_SI
 update(I) <- I + n_SI - n_IR
