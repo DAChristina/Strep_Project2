@@ -11,6 +11,7 @@ if (!require(odin.dust, quietly=T)){
 
 # This will be saved as 'sir_stochastic.R' and will be run by using library(odin.dust)
 # Set wd to the saved file or sir_stochastic.R:
+rm(list=ls())
 wd = "/home/ron/Downloads"
 setwd(wd)
 
@@ -20,15 +21,17 @@ gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 sir_model <- gen_sir$new(pars = list(dt = 1,
                                      S_ini = 10000000,
                                      I_ini = 12,
-                                     beta = 0.1,
-                                     sigma = 0.01),
+                                     R0 = 2,
+                                     DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+                                     sigma = 0.01,
+                                     k = 0.01),
                          time = 1,
                          n_particles = 10L,
                          n_threads = 4L,
                          seed = 1L)
 
 n_times <- 500
-n_particles = 10L
+n_particles = 10
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
 for (t in seq_len(n_times)) {
