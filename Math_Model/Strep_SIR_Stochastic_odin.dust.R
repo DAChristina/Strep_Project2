@@ -1,6 +1,7 @@
 # A nice Intro & some examples:
 # https://github.com/mrc-ide/odin-dust-tutorial/
 # https://mrc-ide.github.io/odin.dust/articles/sir_models.html
+# https://mrc-ide.github.io/sircovid/
 
 if (!require(odin.dust, quietly=T)){
   install.packages("odin.dust",
