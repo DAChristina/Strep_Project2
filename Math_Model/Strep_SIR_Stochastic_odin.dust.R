@@ -13,7 +13,10 @@ if (!require(odin.dust, quietly=T)){
 # This will be saved as 'sir_stochastic.R' and will be run by using library(odin.dust)
 # Set wd to the saved file or sir_stochastic.R:
 rm(list=ls())
-wd = "/home/ron/Downloads"
+
+wd = "C:/Users/dac23/Documents/Downloads" # DIDE
+wd = "C:/Users/dac23/Downloads" # library computers
+wd = "/home/ron/Downloads" # personal OSs
 setwd(wd)
 
 library(odin.dust)
@@ -31,7 +34,7 @@ sir_model <- gen_sir$new(pars = list(dt = 1,
                          n_threads = 4L,
                          seed = 1L)
 
-n_times <- 500
+n_times <- 500 # day
 n_particles = 10
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
