@@ -2,8 +2,8 @@ rm(list=ls())
 
 # 1. PARAMETERS & INITIAL VALUES ###############################################
 N = 1000
-S_int = N - 1
-I_int = 1
+I_int = 100
+S_int = N - I_int
 R_int = 0
 
 R0 = 2 # Assumes R0 equals to 2 (have to check the EpiEstim output for R(t))
@@ -61,9 +61,9 @@ model <- function(iterated){
 one_run<-model(iterated = FALSE)
 plot(y=one_run$I, x = one_run$time_step, type='l', col="red", ylim=c(0,1000))
 lines(y=one_run$S, x = one_run$time_step, col="blue")
+lines(y=one_run$R, x = one_run$time_step, col="green")
 
-
-iterations <- 100
+iterations <- 1000
 results = array(dim=c(iterations, 6))
 results = data.frame(results)
 names(results )= c('Iteration', 'S', 'I', 'R', 'inc', 'rec')
@@ -72,7 +72,10 @@ for ( j in 1:iterations){
   results[j,] <- model(iterated = TRUE)
 }
 
+hist(results$S)
+hist(results$I)
 hist(results$R)
+
 
 # plot(x = data$time_step, y = data$inc, type = 'l')
 # plot(x = data$time_step, y = data$E, type = 'l')
