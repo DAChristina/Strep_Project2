@@ -21,21 +21,23 @@ setwd(wd)
 
 library(odin.dust)
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
+
 # Running the SIR model with dust
 sir_model <- gen_sir$new(pars = list(dt = 1,
-                                     S_ini = 10000000,
-                                     I_ini = 12,
-                                     R0 = 2,
-                                     DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-                                     sigma = 0.01,
-                                     k = 0.01),
-                         time = 1,
-                         n_particles = 10L,
+                                     S_ini = 1e5,
+                                     I_ini = 1,
+                                     # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+                                     beta = 0.2,
+                                     sigma = 0.1
+                                     ),
+                         time = nrow(all_date),
+                         n_particles = 1L,
                          n_threads = 4L,
                          seed = 1L)
 
-n_times <- 500 # day
-n_particles = 10
+# sir_model$state()
+
+n_times <- nrow(all_date) # day
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
 for (t in seq_len(n_times)) {
