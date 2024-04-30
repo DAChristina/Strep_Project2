@@ -5,7 +5,6 @@
 ## Definition of the time-step and output as "time"
 dt <- user()
 initial(time) <- 0
-update(time) <- (step + 1) * dt
 
 # 1. PARAMETERS ################################################################
 S_ini <- user()
@@ -17,6 +16,7 @@ sigma <- user()
 initial(S) <- S_ini
 initial(I) <- I_ini
 initial(R) <- 0
+initial(n_SI_checked) <- rbinom(S_ini, p_SI)
 
 # 3. UPDATES ###################################################################
 N <- S + I + R
@@ -30,7 +30,13 @@ p_IR <- 1- exp(-sigma * dt)
 n_SI <- rbinom(S, p_SI)
 n_IR <- rbinom(I, p_IR)
 
+# Additional checkpoint if dt produce decimals
+# n_SI_checked <- if (time %% ((step + 1) * dt) == 0) n_SI else 0
+
 # The transitions
-update(S) <- S - n_SI
-update(I) <- I + n_SI - n_IR
+update(time) <- (step + 1) * dt
+update(S) <- S - n_SI_checked
+update(I) <- I + n_SI_checked - n_IR
 update(R) <- R + n_IR
+# that "little trick" that previously explained in https://github.com/mrc-ide/dust/blob/master/src/sir.cpp for cumulative incidence:
+update(n_SI_checked) <- if (time %% ((step + 1) * dt) == 0) n_SI else 0
