@@ -1,24 +1,40 @@
 ---
-title: "Strep_data_fitting"
+title: "Strep_dataFitting_Temporary"
 format: html
 editor: visual
 ---
 
 ## 1. Incidence load
-Examples are available on:
-https://mrc-ide.github.io/mcstate/articles/continuous.html
 
+Examples are available on: https://mrc-ide.github.io/mcstate/articles/continuous.html
+
+```{r}
 wd = "C:/Users/dac23/Documents/Downloads" # DIDE
-wd = "C:/Users/dac23/Downloads" # library computers
+wd = "C:/Users/dac23/Downloads" # library computers 
 wd = "/home/ron/Downloads" # personal OSs
 setwd(wd)
 
+```
+
 ```{r}
+if (!require(mcstate, quietly=T)){
+  install.packages("mcstate",
+                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
+  
+  library(mcstate)
+}
+
+if (!require(odin.dust, quietly=T)){
+  install.packages("odin.dust",
+                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
+  
+  library(odin.dust)
+}
+
+
 library(tidyverse)
 library(readxl)
 library(incidence)
-library(mcstate)
-library(odin.dust)
 library(coda)
 ```
 
@@ -126,6 +142,7 @@ Natm_n_imD <- full_join(Natm_n_im, Natm_n30DDeath,
 ```
 
 ## 2. Data fitting
+
 ```{r}
 # Viz per-day counts by base R plot
 par(bty = "n", mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0))
@@ -155,10 +172,9 @@ legend("topleft", names(col_imD), fill = col_imD, bty = "n")
 incidence <- Natm_n_imD %>% 
   select(day, counts_Ser1) %>% 
   rename(cases = counts_Ser1) # That annoying name
+```
 
-# The model below is stochastic, closed system SIR model available in dust
-gen_sir <- dust::dust_example("sir")
-
+```{r}
 # To make my life easier I compile the Serotype 1 cases into a new object called sir_data
 dt <- 1 # rate must be an integer; 0.25 to make it 4 days, I make it 1
 sir_data <- mcstate::particle_filter_data(data = incidence,
@@ -172,21 +188,48 @@ plot(incidence$day, incidence$cases,
 
 ```
 
-Data vs model comparison function
+## 2a. Data vs model comparison function
+```{r}
+# The model below is stochastic, closed system SIR model that I have created before
+# I update the code, now it can show the n_SI according to dt
+gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
+
+```
+
+```{r}
+# This is part of sir odin model:
+pars <- list(dt = 1,
+  S_ini = 1e5,
+  I_ini = 10,
+  beta = 5.640e-03, # Based on the last value from summary(mcmc3)
+  sigma = 1.476e-02 # Based on the last value from summary(mcmc3)
+  # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+)
+
+gen_sir$new(pars = pars,
+            time = 1,
+            n_particles = 1L,
+            n_threads = 4L,
+            seed = 1L)$info()
+
+gen_sir$new(pars = pars,
+            time = 1,
+            n_particles = 1L,
+            n_threads = 4L,
+            seed = 1L)$state()
+```
 
 ```{r}
 # Further details: https://mrc-ide.github.io/mcstate/articles/sir_models.html
 case_compare <- function(state, observed, pars = NULL) {
   exp_noise <- 1e6
 
-  incidence_modelled <- state[5, , drop = TRUE]
+  incidence_modelled <- state[5, , drop = TRUE] # in example, the 5th row is cases_inc (n_SI), I updated the code
   incidence_observed <- observed$cases
   lambda <- incidence_modelled +
     rexp(n = length(incidence_modelled), rate = exp_noise)
   dpois(x = incidence_observed, lambda = lambda, log = TRUE)
 }
-
-gen_sir$new(pars = list(), time = 0, n_particles = 1L)$info()
 ```
 
 ```{r}
@@ -207,11 +250,20 @@ n_particles <- 100
 filter <- mcstate::particle_filter$new(data = sir_data,
                                        model = gen_sir,
                                        n_particles = n_particles,
-                                       compare = case_compare, # change to incidence_compare or NULL failed
+                                       compare = case_compare,
                                        seed = 1L)
 
-filter$run(save_history = TRUE, pars = list(dt = dt))
+# recall pars but dt = dt, and dt <- 1
+dt <- 1
+filter$run(save_history = TRUE, pars = list(dt = dt,
+                                            S_ini = 1e5,
+                                            I_ini = 10,
+                                            beta = 5.640e-03, # Based on the last value from summary(mcmc3)
+                                            sigma = 1.476e-02 # Based on the last value from summary(mcmc3)
+                                            # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+))
 
+# recall true_history
 plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
   if (is.null(obs_end)) {
     obs_end <- max(times)
@@ -228,34 +280,50 @@ plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
             col = cols)
   legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
 }
+```
 
-# Plot these along with the data
-# true_history seems like a simulated data consisting of SIR plus cases
-# see: https://mrc-ide.github.io/mcstate/articles/restart.html
+Plot these along with the data
 
-# Imma create the file in odin based on beta and gamma, a basic SIR model, closed system,
+true_history seems like a simulated data consisting of SIR plus cases
+
+see: https://mrc-ide.github.io/mcstate/articles/restart.html
+
+```{r}
+# Imma create the file in odin based on beta and sigma, a basic SIR model, closed system,
 # with number of rows equivalent to the current output, day = nrow(all_date)
-# Require:
-# sir_stochastic.R
-# Strep_SIR_Stochastic_odin.dust.R
+# transpose is not required because this is the output of sir.odin
+sir_output <- read_csv("Output_sir_result.csv")
 
-true_history <- readRDS("sir_true_history.rds") # weird things happen here
+# weird things happen here. true_history example:
+# true_history <- readRDS("sir_true_history.rds")
+# seems like they combine the SIR model output with real cases (or n_SI from the model?),
+# make them as a wide-type arrays with 4 rows (S,I,R,real cases)
+bindedMtx <- as.matrix(sir_output)
+true_history <- array(bindedMtx, dim = c(4, 1, ncol(true_cases)))
+
 plot_particle_filter(filter$history(), true_history, incidence$day)
 
-# beta and gamma
-filter$run(save_history = TRUE, pars = list(dt = dt, beta = 0.2, gamma = 0.1))
+# beta and sigma
+filter$run(save_history = TRUE, pars = list(dt = dt,
+                                            S_ini = 1e5,
+                                            I_ini = 10,
+                                            beta = 5.640e-03, # Based on the last value from summary(mcmc3)
+                                            sigma = 1.476e-02 # Based on the last value from summary(mcmc3)
+                                            # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+))
 plot_particle_filter(filter$history(), true_history, incidence$day)
 
 ```
 
 ```{r}
 # Using MCMC to Infer Parameters (Metropolis-Hastings):
-beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0)
-gamma <- mcstate::pmcmc_parameter("gamma", 0.1, min = 0, prior = function(p)
+# first time I run the code & it requires ~10' for 500 steps, 200 burnin
+beta <- mcstate::pmcmc_parameter("beta", 5.640e-03, min = 0)
+sigma <- mcstate::pmcmc_parameter("sigma", 1.476e-02, min = 0, prior = function(p)
   dgamma(p, shape = 1, scale = 0.2, log = TRUE))
 
 proposal_matrix <- diag(0.1, 2)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, gamma = gamma),
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, sigma = sigma),
                                            proposal_matrix)
 
 
@@ -269,17 +337,118 @@ control <- mcstate::pmcmc_control(
     progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
+```
 
+```{r}
 processed_chains <- mcstate::pmcmc_thin(pmcmc_run, burnin = n_burnin, thin = 2)
 parameter_mean_hpd <- apply(processed_chains$pars, 2, mean)
 parameter_mean_hpd
 
+```
+
+```{r}
 mcmc1 <- coda::as.mcmc(cbind(pmcmc_run$probabilities, pmcmc_run$pars))
 summary(mcmc1)
+
+```
+
+```{r}
 plot(mcmc1)
 ```
 
-Tuning the pMCMC
+## 3a. Tuning the pMCMC part 1
+
 coz usually the first run is not efficient (in terms of effective sample size per iteration)
 
+```{r}
+coda::effectiveSize(mcmc1)
 
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc1)
+
+```
+
+Use the covariance of the state as the proposal matrix:
+
+```{r}
+proposal_matrix <- cov(pmcmc_run$pars)
+mcmc_pars <- mcstate::pmcmc_parameters$new(
+  list(beta = beta, sigma = sigma),
+  proposal_matrix)
+proposal_matrix
+
+```
+
+```{r}
+control <- mcstate::pmcmc_control(
+    n_steps,
+    save_state = TRUE,
+    save_trajectories = TRUE,
+    progress = TRUE,
+    n_chains = 4)
+pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+
+mcmc2 <- coda::as.mcmc(cbind(
+  pmcmc_tuned_run$probabilities, pmcmc_tuned_run$pars))
+
+summary(mcmc2)
+plot(mcmc2)
+
+```
+
+```{r}
+coda::effectiveSize(mcmc2)
+
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc2)
+
+```
+
+## 3b. Tuning the pMCMC part 2
+
+Use the covariance of the state as the proposal matrix:
+
+```{r}
+# recall pmcmc_tuned_run as the result of pmcmc part 1
+proposal_matrix <- cov(pmcmc_tuned_run$pars)
+mcmc_pars2 <- mcstate::pmcmc_parameters$new(
+  list(beta = beta, sigma = sigma),
+  proposal_matrix)
+proposal_matrix
+
+```
+
+```{r}
+# increase the n_steps from 500 to 1e4 (requires roughly 3h10m 1 chain ~ 12h40m)
+n_steps2 <- 1e3
+control <- mcstate::pmcmc_control(
+    n_steps2,
+    save_state = TRUE,
+    save_trajectories = TRUE,
+    progress = TRUE,
+    n_chains = 4)
+pmcmc_tuned_run2 <- mcstate::pmcmc(mcmc_pars2, filter, control = control)
+
+mcmc3 <- coda::as.mcmc(cbind(
+  pmcmc_tuned_run2$probabilities, pmcmc_tuned_run2$pars))
+
+summary(mcmc3)
+plot(mcmc3)
+
+```
+
+```{r}
+coda::effectiveSize(mcmc3)
+
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc3)
+
+```
+
+## 4. Running predictions
