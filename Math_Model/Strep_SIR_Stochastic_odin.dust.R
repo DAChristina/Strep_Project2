@@ -23,34 +23,45 @@ library(odin.dust)
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
-sir_model <- gen_sir$new(pars = list(dt = 1,
-                                     S_ini = 1e5,
-                                     I_ini = 1,
-                                     # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-                                     beta = 0.2,
-                                     sigma = 0.1
-                                     ),
-                         time = nrow(all_date),
+pars <- list(dt = 1,
+             S_ini = 1e5,
+             I_ini = 10,
+             beta = 5.640e-03, # Based on the last value from summary(mcmc3)
+             sigma = 1.476e-02 # Based on the last value from summary(mcmc3)
+             # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+)
+
+sir_model <- gen_sir$new(pars = pars,
+                         time = 1,
                          n_particles = 1L,
                          n_threads = 4L,
                          seed = 1L)
 
-# sir_model$state()
+sir_model$state()
 
-n_times <- nrow(all_date) # day
+# update_state is required "every single time" to run & produce matrix output (don't know why)
+sir_model$update_state(pars = pars,
+                       time = 0) # make sure time is 0
+
+
+n_times <- nrow(all_date) # 4745 or similar to the number of date range (of the provided data)
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
 for (t in seq_len(n_times)) {
   x[ , , t] <- sir_model$run(t)
 }
-time <- x[1, 1, ]
-x <- x[-1, , ]
+time <- x[1, 1, ] # because in the position of [1, 1, ] is time
+x <- x[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
+glimpse(x)
 
 par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966")
+cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966", n_SI = "orange")
 matplot(time, t(x[1, , ]), type = "l",
         xlab = "Time", ylab = "Number of individuals",
         col = cols[["S"]], lty = 1, ylim = range(x))
 matlines(time, t(x[2, , ]), col = cols[["I"]], lty = 1)
 matlines(time, t(x[3, , ]), col = cols[["R"]], lty = 1)
+matlines(time, t(x[4, , ]), col = cols[["n_SI"]], lty = 1)
 legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+
+write.csv(x, file="Output_sir_result.csv", row.names =T)
