@@ -1,69 +1,75 @@
-# A nice Intro & some examples:
-# https://github.com/mrc-ide/odin-dust-tutorial/
-# https://mrc-ide.github.io/odin.dust/articles/sir_models.html
-# https://mrc-ide.github.io/sircovid/
-
-if (!require(odin.dust, quietly=T)){
-  install.packages("odin.dust",
-                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
-  
-  library(odin.dust)
+if (!require(odin, quietly=T)){
+  install.packages("odin")
+  library(odin)
 }
 
-# This will be saved as 'sir_stochastic.R' and will be run by using library(odin.dust)
-# Set wd to the saved file or sir_stochastic.R:
-rm(list=ls())
+# 28.04.2024
+# error occurs when I tried to run the code for both on Win (computer library) & Lin (Mint)
+# dde package is required
+if (!require(dde, quietly=T)){
+  install.packages("dde")
+  library(dde)
+}
 
-wd = "C:/Users/dac23/Documents/Downloads" # DIDE
-wd = "C:/Users/dac23/Downloads" # library computers
-wd = "/home/ron/Downloads" # personal OSs
-setwd(wd)
+gen_sir <- odin::odin({
+  dt <- user()
+  initial(time) <- 0
+  update(time) <- (step + 1) * dt
+  
+  # 1. PARAMETERS ################################################################
+  S_ini <- user()
+  I_ini <- user()
+  beta <- user()
+  sigma <- user()
+  
+  # 2. INITIAL VALUES ############################################################
+  initial(S) <- S_ini
+  initial(I) <- I_ini
+  initial(R) <- 0
+  
+  # 3. UPDATES ###################################################################
+  N <- S + I + R
+  lambda <- beta*I/N
+  
+  # Individual probabilities of transition
+  p_SI <- 1- exp(-lambda * dt) # assume dt equals to 1
+  p_IR <- 1- exp(-sigma * dt) # assume dt equals to 1
+  
+  # Draws for numbers changing between compartments
+  n_SI <- rbinom(S, p_SI)
+  n_IR <- rbinom(I, p_IR)
+  
+  # The transitions
+  update(S) <- S - n_SI
+  update(I) <- I + n_SI - n_IR
+  update(R) <- R + n_IR
+})
 
-library(odin.dust)
-gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
+# sir_model$state()
+# all_date <- data.frame(date = seq(1:4745)) # is number of day of observations
 
-# Running the SIR model with dust
 pars <- list(dt = 1,
-             S_ini = 1e3,
-             I_ini = 10,
-             beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
-             sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
-             # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+  S_ini = 1e5,
+  I_ini = 10,
+  beta = 0.2,
+  sigma = 0.1
+  # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 )
 
-sir_model <- gen_sir$new(pars = pars,
-                         time = 1,
-                         n_particles = 1L,
-                         n_threads = 4L,
-                         seed = 1L)
+sir_model <- gen_sir$new(user = pars)
 
-sir_model$state()
-
-# update_state is required "every single time" to run & produce matrix output (don't know why)
-sir_model$update_state(pars = pars,
-                       time = 0) # make sure time is 0
-
-all_date <- incidence$day
-n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
-n_particles <- 10
-x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
-
-for (t in seq_len(n_times)) {
-  x[ , , t] <- sir_model$run(t)
-}
-time <- x[1, 1, ] # because in the position of [1, 1, ] is time
-x <- x[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
-glimpse(x)
+set.seed(0)
+timesteps <- seq(0, nrow(all_date), by=1)   # time.
+# timesteps <- seq(0, 500, by=1)   # trial other timestep value to compare the result
+sir_res <- sir_model$run(timesteps)
 
 par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966", n_SI_daily = "orange", n_SI_cumul = "green")
-matplot(time, t(x[1, , ]), type = "l",
-        xlab = "Time", ylab = "Number of individuals",
-        col = cols[["S"]], lty = 1, ylim = range(x))
-matlines(time, t(x[2, , ]), col = cols[["I"]], lty = 1)
-matlines(time, t(x[3, , ]), col = cols[["R"]], lty = 1)
-matlines(time, t(x[4, , ]), col = cols[["n_SI_daily"]], lty = 1)
-matlines(time, t(x[5, , ]), col = cols[["n_SI_cumul"]], lty = 1)
-legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966")
 
-write.csv(x, file="Output_sir_result.csv", row.names =T)
+matplot(sir_res[, 1], sir_res[, (3:ncol(sir_res))], # not choose the first & second column
+        xlab = "Time", ylab = "Number of individuals",
+        type = "l", col = cols, lty = 1)
+legend("topright", lwd = 1, col = cols, legend = c("S", "I", "R"), bty = "n")
+
+# The sir_res output is a matrix, save this to csv:
+write.csv(sir_res, file="Output_sir_result.csv", row.names =T)
