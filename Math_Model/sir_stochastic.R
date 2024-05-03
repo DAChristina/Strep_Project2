@@ -3,12 +3,12 @@
 # To change the model into stochastic fuction, use the probabilistic function:
 ## Individual probabilities of transition:
 ## Definition of the time-step and output as "time"
-dt <- user()
+dt <- user(1) # required in mcState
 initial(time) <- 0
 
 # 1. PARAMETERS ################################################################
-S_ini <- user()
-I_ini <- user()
+S_ini <- user(1e5) # required in mcState
+I_ini <- user(10) # required in mcState
 beta <- user()
 sigma <- user()
 
