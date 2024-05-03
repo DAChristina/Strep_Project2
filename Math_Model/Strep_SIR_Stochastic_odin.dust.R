@@ -24,10 +24,10 @@ gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
 pars <- list(dt = 1,
-             S_ini = 1e3,
+             S_ini = 1e5,
              I_ini = 10,
-             beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
-             sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
+             beta = (1/15.75)*1.1,
+             sigma = (1/21)
              # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 )
 
@@ -43,8 +43,9 @@ sir_model$state()
 sir_model$update_state(pars = pars,
                        time = 0) # make sure time is 0
 
-all_date <- incidence$day
-n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+# all_date <- incidence$day
+all_date <- data.frame(col = integer(4745))
+n_times <- nrow(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
 n_particles <- 10
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
