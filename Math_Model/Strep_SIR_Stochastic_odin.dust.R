@@ -1,7 +1,28 @@
-# A nice Intro & some examples:
-# https://github.com/mrc-ide/odin-dust-tutorial/
-# https://mrc-ide.github.io/odin.dust/articles/sir_models.html
-# https://mrc-ide.github.io/sircovid/
+---
+title: "Strep_dataFitting_Temporary"
+format: html
+editor: visual
+---
+
+## 1. Data Preparation
+
+Examples are available on: https://mrc-ide.github.io/mcstate/articles/continuous.html
+
+```{r}
+wd = "C:/Users/dac23/Documents/Downloads" # DIDE
+wd = "C:/Users/dac23/Downloads" # library computers 
+wd = "/home/ron/Downloads" # personal OSs
+setwd(wd)
+
+```
+
+```{r}
+if (!require(mcstate, quietly=T)){
+  install.packages("mcstate",
+                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
+  
+  library(mcstate)
+}
 
 if (!require(odin.dust, quietly=T)){
   install.packages("odin.dust",
@@ -10,61 +31,480 @@ if (!require(odin.dust, quietly=T)){
   library(odin.dust)
 }
 
-# This will be saved as 'sir_stochastic.R' and will be run by using library(odin.dust)
-# Set wd to the saved file or sir_stochastic.R:
-rm(list=ls())
 
-wd = "C:/Users/dac23/Documents/Downloads" # DIDE
-wd = "C:/Users/dac23/Downloads" # library computers
-wd = "/home/ron/Downloads" # personal OSs
-setwd(wd)
+library(tidyverse)
+library(readxl)
+library(incidence)
+library(coda)
+```
 
-library(odin.dust)
+```{r}
+# New updated data with meningitis (25.04.2024)
+dat <- read_excel("serotype1_UKHSA_imperial_date_age_region_MOLIS_withdeath_meningitis_clean.xlsx") #%>% 
+  # glimpse()
+
+dat <- dat %>% 
+  rename(Earliest.specimen.date = Earliestspecimendate,
+         current.region.name = currentregionname)
+
+dat_G <- dat %>% 
+  mutate(AGEYR = ifelse(AGEYR >= 90, 90, as.numeric(AGEYR)), # For incidence calculation, data grouped for people aged 90+
+         year = year(Earliest.specimen.date),
+         month = month(Earliest.specimen.date),
+         vacc = case_when(
+           year < 2006 ~ "Pre-PCV7",
+           year >= 2006 & year < 2011 ~ "PCV7",
+           year >= 2011 ~ "PCV13",
+           TRUE ~ NA_character_
+         ),
+         ageGroup = case_when(
+           AGEYR < 2 ~ "<2",
+           AGEYR >= 2 & AGEYR < 5 ~ "2-4",
+           AGEYR >= 5 & AGEYR < 15 ~ "5-14",
+           AGEYR >= 15 & AGEYR < 31 ~ "15-30", # Edit the Age-band into 15-30 & 31-44
+           AGEYR >= 31 & AGEYR < 45 ~ "31-44", # Edit the Age-band into 15-30 & 31-44
+           AGEYR >= 45 & AGEYR < 65 ~ "45-64",
+           AGEYR >= 65 ~ "65+",
+           is.na(AGEYR) ~ "Unknown" # 16 IDs have no AGEYR
+           # TRUE ~ "Unknown" 
+         ),
+         current.region.name = ifelse(current.region.name == "EASTERN", "EAST", current.region.name), # Wrong perception of "EASTERN" that should be "EAST"
+         current.region.name = case_when(
+           current.region.name == "E MIDS" ~ "East Midlands",
+           current.region.name == "EAST" ~ "East of England",
+           current.region.name == "LONDON" ~ "London",
+           current.region.name == "N EAST" ~ "North East",
+           current.region.name == "N WEST" ~ "North West",
+           current.region.name == "S EAST" ~ "South East",
+           current.region.name == "S WEST" ~ "South West",
+           current.region.name == "W MIDS" ~ "West Midlands",
+           current.region.name == "YORK&HUM" ~ "Yorkshire and The Humber",
+           TRUE ~ current.region.name
+         ),
+         ageLabel = ifelse(AGEYR >= 90, 90, as.numeric(AGEYR)), # For incidence calculation, data grouped for people aged 90+
+  ) %>% 
+  glimpse()
+```
+
+```{r}
+# Basic case count data without age structure or regions
+
+# Create all hypothetical recorded disease date
+dat_G$Earliest.specimen.date <- as.Date(dat_G$Earliest.specimen.date)
+all_date <- data.frame(allDate = seq.Date(from = min(dat_G$Earliest.specimen.date),
+                                to = max(dat_G$Earliest.specimen.date), 
+                                by = 1))
+all_date$day <- 1:nrow(all_date)
+# Coz the incidence only requires 2 columns called "counts" and "Day" in NUMBERS
+
+# The counts (but in 0 counts the date are not recorded)
+Natm_ni <- dat_G %>% 
+  group_by(Earliest.specimen.date) %>% 
+  summarise(counts_Ser1 = n()) %>% 
+  ungroup() #%>% 
+  # glimpse()
+
+Natm_nmeningitis <- dat_G %>% 
+  filter(MeningitisFlag == "Y") %>% 
+  group_by(Earliest.specimen.date) %>% 
+  summarise(counts_meningitis = n()) %>% 
+  ungroup() #%>% 
+  # glimpse()
+
+Natm_n30DDeath <- dat_G %>% 
+  filter(`30daydeath` == "D") %>% 
+  group_by(Earliest.specimen.date) %>% 
+  summarise(counts_30DDeath = n()) %>% 
+  ungroup() #%>% 
+  # glimpse()
+
+
+# Create a new df based on counts per day for Serotype 1, meningitis, and 30 days death
+Natm_n_i <- full_join(all_date, Natm_ni,
+                      by = c("allDate" = "Earliest.specimen.date"))
+
+Natm_n_im <- full_join(Natm_n_i, Natm_nmeningitis,
+                      by = c("allDate" = "Earliest.specimen.date"))
+
+Natm_n_imD <- full_join(Natm_n_im, Natm_n30DDeath,
+                      by = c("allDate" = "Earliest.specimen.date")) %>% 
+  replace(is.na(.), 0) %>% # NA means no data of meningitis or 30 days death, changed them to 0
+  glimpse()
+
+# Total population data by age, year for each region
+# SOURCE: https://www.nomisweb.co.uk/
+# pop <- read_excel("nomis_2024_04_15_124553_DCedit.xlsx") %>% 
+  # glimpse()
+# I don't think I need total population for now,
+# Examples on https://github.com/mrc-ide/mcstate/blob/master/inst/sir_incidence.csv
+# Requires case count per aligned day only
+
+```
+
+```{r}
+# Viz per-day counts by base R plot
+par(bty = "n", mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0))
+
+col_imD <- c(counts_Ser1 = "deepskyblue3",
+             counts_meningitis = "green",
+             counts_30DDeath = "maroon")
+
+
+plot(Natm_n_imD$allDate, Natm_n_imD$counts_Ser1, type = "b",
+     xlab = "Date", ylab = "Counts",
+     ylim = c(0, max(Natm_n_imD$counts_Ser1)+2),
+     col = col_imD[1], pch = 20)
+
+lines(Natm_n_imD$allDate, Natm_n_imD$counts_meningitis,
+      type = "b", col = col_imD[2], pch = 20)
+lines(Natm_n_imD$allDate, Natm_n_imD$counts_30DDeath,
+      type = "b", col = col_imD[3], pch = 20)
+legend("topleft", names(col_imD), fill = col_imD, bty = "n")
+
+```
+
+## 2. Data Fitting
+The anatomy of an mcstate particle filter, as noted above, consists of three main components: \n 
+1. A set of observations to fit the model to, generated using mcstate::particle_filter_data(). \n 
+2. A model to fit, which must be a dust generator, either dust::dust() or odin.dust::odin_dust(). \n 
+3. A comparison function, which is an R function which calculates the likelihood of the state given the data at one time point.
+
+```{r}
+# There is a calibration function in mcstate to fit our model to data.
+# https://mrc-ide.github.io/mcstate/articles/sir_models.html
+
+incidence <- Natm_n_imD %>% 
+  select(day, counts_Ser1) %>% 
+  rename(cases = counts_Ser1) # That annoying name
+```
+
+```{r}
+# To make my life easier I compile the Serotype 1 cases into a new object called sir_data
+# data is fed as an input to mcstate::particle_filter_data
+dt <- 1 # rate must be an integer; 0.25 to make it 4 days, I make it 1
+sir_data <- mcstate::particle_filter_data(data = incidence,
+                                          time = "day",
+                                          rate = 1 / dt)
+rmarkdown::paged_table(sir_data)
+
+# And ofc to make sure this is Strep's data:
+plot(incidence$day, incidence$cases,
+     type = "l", xlab = "Day", ylab = "New cases")
+
+```
+
+## 2a. Model Load
+
+```{r}
+# The model below is stochastic, closed system SIR model that I have created before
+# I update the code, filled the marameters with numbers;
+# e.g.dt <- user(1) because if dt <- user() generates error during MCMC run
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
-# Running the SIR model with dust
+```
+
+```{r}
+# This is part of sir odin model:
 pars <- list(dt = 1,
-             S_ini = 1e5,
-             I_ini = 10,
-             beta = (1/15.75)*1.1,
-             sigma = (1/21)
-             # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+  S_ini = 1e5,
+  I_ini = 10,
+  beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
+  sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
+  # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 )
 
+gen_sir$new(pars = pars,
+            time = 1,
+            n_particles = 1L,
+            n_threads = 4L,
+            seed = 1L)$info()
+
+```
+
+## 2b. The Comparison Function
+
+```{r}
+# Further details: https://mrc-ide.github.io/mcstate/articles/sir_models.html
+case_compare <- function(state, observed, pars = NULL) {
+  exp_noise <- 1e6
+
+  incidence_modelled <- state[5, , drop = TRUE] # in the example, the 5th row is cases_inc (n_SI_daily)
+  incidence_observed <- observed$cases # daily new cases
+  lambda <- incidence_modelled +
+    rexp(n = length(incidence_modelled), rate = exp_noise)
+  dpois(x = incidence_observed, lambda = lambda, log = TRUE)
+}
+```
+
+```{r}
+# If use SIR example the calculation below is not required:
+incidence_compare <- function(state, prev_state, observed, pars = NULL) {
+  exp_noise <- 1e6
+
+  lambda <- state[6, , drop = TRUE] +
+    rexp(n = length(incidence_modelled), rate = exp_noise) # lambda = n_SI_cumul + rexp(incid, rate)
+  dpois(x = observed$cases, lambda = lambda, log = TRUE)
+}
+
+```
+
+Plot these along with the data
+
+true_history seems like a simulated data consisting of SIR plus cases
+
+see: https://mrc-ide.github.io/mcstate/articles/restart.html
+
+```{r}
+# Imma create the file in odin based on beta and sigma, a basic SIR model, closed system,
+# with number of rows equivalent to the current output, day = nrow(all_date)
+# transpose is not required because this is the output of sir.odin
 sir_model <- gen_sir$new(pars = pars,
                          time = 1,
                          n_particles = 1L,
                          n_threads = 4L,
                          seed = 1L)
 
-sir_model$state()
-
 # update_state is required "every single time" to run & produce matrix output (don't know why)
 sir_model$update_state(pars = pars,
                        time = 0) # make sure time is 0
 
-# all_date <- incidence$day
-all_date <- data.frame(col = integer(4745))
-n_times <- nrow(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
-n_particles <- 10
-x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
+all_date <- incidence$day
+n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+n_particles <- 1
+sir_output <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
 for (t in seq_len(n_times)) {
-  x[ , , t] <- sir_model$run(t)
+  sir_output[ , , t] <- sir_model$run(t)
 }
-time <- x[1, 1, ] # because in the position of [1, 1, ] is time
-x <- x[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
-glimpse(x)
+time <- sir_output[1, 1, ] # because in the position of [1, 1, ] is time
+sir_output <- sir_output[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
+glimpse(sir_output)
+```
 
-par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966", n_SI_daily = "orange", n_SI_cumul = "green")
-matplot(time, t(x[1, , ]), type = "l",
-        xlab = "Time", ylab = "Number of individuals",
-        col = cols[["S"]], lty = 1, ylim = range(x))
-matlines(time, t(x[2, , ]), col = cols[["I"]], lty = 1)
-matlines(time, t(x[3, , ]), col = cols[["R"]], lty = 1)
-matlines(time, t(x[4, , ]), col = cols[["n_SI_daily"]], lty = 1)
-matlines(time, t(x[5, , ]), col = cols[["n_SI_cumul"]], lty = 1)
-legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+```{r}
+# weird things happen here. true_history example:
+# true_history <- readRDS("sir_true_history.rds")
+# seems like they combine the SIR model output with n_SI_daily from the model,
+# make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
+# create a new matrix with initial state (t1 = 0)
+begin_t0_value <- c(1e5, 0, 0, 0, 0)  # Receall S_ini in Pars
+# begin_t0 <- array(begin_t0_value, dim = c(5, 1, 1))
+begin_t0 <- matrix(nrow = 4, ncol = 1, data = begin_t0_value)
 
-write.csv(x, file="Output_sir_result.csv", row.names =T)
+# The sir_output with t1 = 1
+chosen_output <- sir_output[1:4, ]
+bindedMtx <- as.matrix(chosen_output)
+
+# Combine
+true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
+true_history <- array(bindedMtx, dim = c(4, 1, length(all_date)+1))
+glimpse(true_history)
+# ori_history <- array(bindedMtx, dim = c(4, 1, length(all_date))) # 1-4 means S, I, R, n_SI_daily
+# true_history <- array(c(begin_t0, ori_history), dim = c(dim(begin_t0)[1], dim(ori_history)[2], length(all_date)+1)) # 3-d matrices bind
+
+```
+
+```{r}
+# recall true_history
+plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
+  if (is.null(obs_end)) {
+    obs_end <- max(times)
+  }
+
+  par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
+  cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966")
+  matplot(times, t(history[2, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
+          xlab = "Time", ylab = "Number of individuals",
+          col = cols[["S"]], lty = 1, ylim = range(history))
+  matlines(times, t(history[3, , -1]), col = cols[["I"]], lty = 1)
+  matlines(times, t(history[4, , -1]), col = cols[["R"]], lty = 1)
+  matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
+            col = cols)
+  legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+}
+
+# Inferring Parameters
+n_particles <- 100
+filter <- mcstate::particle_filter$new(data = sir_data,
+                                       model = gen_sir, # Changing gen_sir into sir_model (with updated parameters that I can control) produce error:
+                                       # Error in initialize(...) : 'model' must be a dust_generator
+                                       n_particles = n_particles,
+                                       compare = case_compare,
+                                       seed = 1L)
+
+# recall pars but dt = dt, and dt <- 1
+dt <- 1
+filter$run(save_history = TRUE, pars = list(dt = dt,
+                                            S_ini = 1e5,
+                                            I_ini = 10,
+                                            beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
+                                            sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
+                                            # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+))
+
+plot_particle_filter(filter$history(), true_history, incidence$day)
+```
+
+```{r}
+# beta and sigma
+filter$run(save_history = TRUE, Qpars = list(dt = dt,
+                                            S_ini = 1e5,
+                                            I_ini = 10,
+                                            beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
+                                            sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
+                                            # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+))
+plot_particle_filter(filter$history(), true_history, incidence$day)
+
+```
+
+
+## 3. MCMC Run
+```{r}
+# Using MCMC to Infer Parameters (Metropolis-Hastings):
+# first time I run the code & it requires ~10' for 500 steps, 200 burnin
+
+# Invasiveness estimate based on https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009389
+# S1 Dataset. Invasiveness estimates for serotypes in children.
+# Serotype	invasiveness	invasiveness_lower	invasiveness_upper
+# 1	0.017369780939027	0.009888269105106	0.031491598702714
+
+# S2 Dataset. Invasiveness estimates for serotypes in adults.
+# Serotype	invasiveness	invasiveness_lower	invasiveness_upper
+# 1	0.019837434032008	0.007774465457634	0.057617171798831
+
+# For this trial I use the mean number of invasiveness estimate:
+beta <- mcstate::pmcmc_parameter("beta", 0.2, min = 0.01860361)
+sigma <- mcstate::pmcmc_parameter("sigma", 0.1, min = 0, prior = function(p)
+  dgamma(p, shape = 1, scale = 0.2, log = TRUE))
+
+proposal_matrix <- diag(0.1, 2)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, sigma = sigma),
+                                           proposal_matrix)
+
+
+n_steps <- 500
+n_burnin <- 200
+
+control <- mcstate::pmcmc_control(
+    n_steps,
+    save_state = TRUE,
+    save_trajectories = TRUE,
+    progress = TRUE)
+pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
+```
+
+```{r}
+processed_chains <- mcstate::pmcmc_thin(pmcmc_run, burnin = n_burnin, thin = 2)
+parameter_mean_hpd <- apply(processed_chains$pars, 2, mean)
+parameter_mean_hpd
+
+```
+
+```{r}
+mcmc1 <- coda::as.mcmc(cbind(pmcmc_run$probabilities, pmcmc_run$pars))
+summary(mcmc1)
+
+```
+
+```{r}
+plot(mcmc1)
+```
+
+## 3a. Tuning the pMCMC part 1
+
+coz usually the first run is not efficient (in terms of effective sample size per iteration)
+
+```{r}
+coda::effectiveSize(mcmc1)
+
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc1)
+
+```
+
+Use the covariance of the state as the proposal matrix:
+
+```{r}
+proposal_matrix <- cov(pmcmc_run$pars)
+mcmc_pars <- mcstate::pmcmc_parameters$new(
+  list(beta = beta, sigma = sigma),
+  proposal_matrix)
+proposal_matrix
+
+```
+
+```{r}
+control <- mcstate::pmcmc_control(
+    n_steps,
+    save_state = TRUE,
+    save_trajectories = TRUE,
+    progress = TRUE,
+    n_chains = 4)
+pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+
+mcmc2 <- coda::as.mcmc(cbind(
+  pmcmc_tuned_run$probabilities, pmcmc_tuned_run$pars))
+
+summary(mcmc2)
+plot(mcmc2)
+
+```
+
+```{r}
+coda::effectiveSize(mcmc2)
+
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc2)
+
+```
+
+## 3b. Tuning the pMCMC part 2
+
+Use the covariance of the state as the proposal matrix:
+
+```{r}
+# recall pmcmc_tuned_run as the result of pmcmc part 1
+proposal_matrix <- cov(pmcmc_tuned_run$pars)
+mcmc_pars2 <- mcstate::pmcmc_parameters$new(
+  list(beta = beta, sigma = sigma),
+  proposal_matrix)
+proposal_matrix
+
+```
+
+```{r}
+# increase the n_steps from 500 to 1e4 (requires roughly 3h10m 1 chain ~ 12h40m)
+n_steps2 <- 1e3
+control <- mcstate::pmcmc_control(
+    n_steps2,
+    save_state = TRUE,
+    save_trajectories = TRUE,
+    progress = TRUE,
+    n_chains = 4)
+pmcmc_tuned_run2 <- mcstate::pmcmc(mcmc_pars2, filter, control = control)
+
+mcmc3 <- coda::as.mcmc(cbind(
+  pmcmc_tuned_run2$probabilities, pmcmc_tuned_run2$pars))
+
+summary(mcmc3)
+plot(mcmc3)
+
+```
+
+```{r}
+coda::effectiveSize(mcmc3)
+
+```
+
+```{r}
+1 - coda::rejectionRate(mcmc3)
+
+```
+
+## 4. Running predictions
