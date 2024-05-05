@@ -10,7 +10,7 @@ initial(time) <- 0
 S_ini <- user(1e5) # required in mcState
 I_ini <- user(10) # required in mcState
 beta <- user()
-sigma <- user()
+sigma <- user(1/15.75) # required in mcState if this is fixed
 
 # 2. INITIAL VALUES ############################################################
 initial(S) <- S_ini
