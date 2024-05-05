@@ -208,8 +208,8 @@ gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 pars <- list(dt = 1,
              S_ini = 1e5,
              I_ini = 10,
-             beta = (1/15.75)*1.2,
-             sigma = (1/15.75) # carriage duration = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+             beta = (1/15.75)*1.2
+             # sigma = (1/15.75) # carriage duration = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
 gen_sir$new(pars = pars,
@@ -336,9 +336,8 @@ dt <- 1
 filter$run(save_history = TRUE, pars = list(dt = dt,
                                             S_ini = 1e5,
                                             I_ini = 10,
-                                            beta = 0.2, #5.640e-03, # Based on the last value from summary(mcmc3)
-                                            sigma = 0.1 #1.476e-02 # Based on the last value from summary(mcmc3)
-                                            # DOI = 15.75, # 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+                                            beta = (1/15.75)*1.2
+                                            # sigma = (1/15.75) 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 ))
 
 plot_particle_filter(filter$history(), true_history, incidence$day)
@@ -360,11 +359,12 @@ plot_particle_filter(filter$history(), true_history, incidence$day)
 
 # For this trial I use the mean number of invasiveness estimate:
 beta <- mcstate::pmcmc_parameter("beta", (1/15.75)*1.2, min = 0.01860361/365) # Invasiveness per carrier per day
-sigma <- mcstate::pmcmc_parameter("sigma", (1/15.75), min = 0, prior = function(p)
-  dgamma(p, shape = 1, scale = 0.2, log = TRUE))
+# sigma <- mcstate::pmcmc_parameter("sigma", (1/15.75), min = 0, prior = function(p)
+#   dgamma(p, shape = 1, scale = 0.2, log = TRUE))
 
-proposal_matrix <- diag(0.1, 2)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta, sigma = sigma),
+# proposal_matrix <- diag(0.1, 2)
+proposal_matrix <- as.matrix(0.1)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta),# sigma = sigma),
                                            proposal_matrix)
 
 
@@ -416,7 +416,7 @@ Use the covariance of the state as the proposal matrix:
 ```{r}
 proposal_matrix <- cov(pmcmc_run$pars)
 mcmc_pars <- mcstate::pmcmc_parameters$new(
-  list(beta = beta, sigma = sigma),
+  list(beta = beta),# sigma = sigma),
   proposal_matrix)
 proposal_matrix
 
@@ -457,7 +457,7 @@ Use the covariance of the state as the proposal matrix:
 # recall pmcmc_tuned_run as the result of pmcmc part 1
 proposal_matrix <- cov(pmcmc_tuned_run$pars)
 mcmc_pars2 <- mcstate::pmcmc_parameters$new(
-  list(beta = beta, sigma = sigma),
+  list(beta = beta),# sigma = sigma),
   proposal_matrix)
 proposal_matrix
 
