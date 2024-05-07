@@ -9,8 +9,10 @@ initial(time) <- 0
 # 1. PARAMETERS ################################################################
 S_ini <- user(1e5) # required in mcState
 I_ini <- user(10) # required in mcState
-beta <- user()
+beta_0 <- user(0.01860361/365) # average infection for Serotype 1, invasiveness per carrier per day (Lochen et al., 2022)
+beta_1 <- user()
 sigma <- user(1/15.75) # required in mcState if this is fixed
+pi <- user(3.141593)
 
 # 2. INITIAL VALUES ############################################################
 initial(S) <- S_ini
@@ -21,6 +23,7 @@ initial(n_SI_cumul) <- rbinom(S_ini, p_SI)
 
 # 3. UPDATES ###################################################################
 N <- S + I + R
+beta <- beta_0 *(1 +beta_1*cos(2*pi*dt))
 lambda <- beta*I/N
 
 # Individual probabilities of transition
