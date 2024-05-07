@@ -24,9 +24,10 @@ gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
 pars <- list(dt = 1,
-             S_ini = 1e5,
+             S_ini = 1e2,
              I_ini = 10,
-             beta = (1/15.75)*1.2,
+             #beta = 0.06, # based on mcmc run, prior = (1/15.75)*1.2,
+		         beta_1 = 0.2,
              sigma = (1/15.75) # carriage duration = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
@@ -43,8 +44,8 @@ sir_model$update_state(pars = pars,
                        time = 0) # make sure time is 0
 
 # all_date <- incidence$day
-all_date <- data.frame(col = integer(4745))
-n_times <- nrow(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+# all_date <- data.frame(col = integer(4745))
+n_times <- 400 # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
 n_particles <- 10
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
