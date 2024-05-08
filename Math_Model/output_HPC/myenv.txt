@@ -1,0 +1,127 @@
+CONDA_SHLVL=0
+PBS_ENVIRONMENT=PBS_BATCH
+CONDA_EXE=/rds/general/user/dac23/home/anaconda3/bin/conda
+PBS_O_LANG=en_GB.UTF-8
+RDS=/rds/general/user/dac23
+LANG=en_GB.UTF-8
+HISTCONTROL=ignoredups
+HOSTNAME=cx3-7-2.cx3.hpc.ic.ac.uk
+OLDPWD=/var/tmp/pbs.9382036.pbs
+PBS_O_HOME=/rds/general/user/dac23/home
+PBS_JOBID=9382036.pbs
+ENVIRONMENT=BATCH
+PBS_JOBNAME=submit.pbs
+NCPUS=1
+PBS_O_PATH=/rds/general/user/dac23/home/anaconda3/envs/R_envConda/bin:/rds/general/user/dac23/home/anaconda3/bin:/apps/sw-eb/software/R/4.3.2-gfbf-2023a/bin:/apps/sw-eb/software/FriBidi/1.0.12-GCCcore-12.3.0/bin:/apps/sw-eb/software/HarfBuzz/5.3.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/ICU/73.2-GCCcore-12.3.0/sbin:/apps/sw-eb/software/ICU/73.2-GCCcore-12.3.0/bin:/apps/sw-eb/software/Tk/8.6.13-GCCcore-12.3.0/bin:/apps/sw-eb/software/cURL/8.0.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/libgit2/1.7.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/OpenSSL/1.1/bin:/apps/sw-eb/software/PCRE/8.45-GCCcore-12.3.0/bin:/apps/sw-eb/software/Java/11.0.2:/apps/sw-eb/software/Java/11.0.2/bin:/apps/sw-eb/software/LibTIFF/4.5.0-GCCcore-12.3.0/bin:/apps/sw-eb/software/libdeflate/1.18-GCCcore-12.3.0/bin:/apps/sw-eb/software/jbigkit/2.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/libjpeg-turbo/2.1.5.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/NASM/2.16.01-GCCcore-12.3.0/bin:/apps/sw-eb/software/SQLite/3.42.0-GCCcore-12.3.0/bin:/apps/sw-eb/software/Tcl/8.6.13-GCCcore-12.3.0/bin:/apps/sw-eb/software/cairo/1.17.8-GCCcore-12.3.0/bin:/apps/sw-eb/software/GLib/2.77.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/PCRE2/10.42-GCCcore-12.3.0/bin:/apps/sw-eb/software/gettext/0.21.1-GCCcore-12.3.0/bin:/apps/sw-eb/software/libxml2/2.11.4-GCCcore-12.3.0/bin:/apps/sw-eb/software/LLVM/16.0.6-GCCcore-12.3.0/bin:/apps/sw-eb/software/zstd/1.5.5-GCCcore-12.3.0/bin:/apps/sw-eb/software/lz4/1.9.4-GCCcore-12.3.0/bin:/apps/sw-eb/software/XZ/5.4.2-GCCcore-12.3.0/bin:/apps/sw-eb/software/gzip/1.12-GCCcore-12.3.0/bin:/apps/sw-eb/software/X11/20230603-GCCcore-12.3.0/bin:/apps/sw-eb/software/fontconfig/2.14.2-GCCcore-12.3.0/bin:/apps/sw-eb/software/util-linux/2.39-GCCcore-12.3.0/sbin:/apps/sw-eb/software/util-linux/2.39-GCCcore-12.3.0/bin:/apps/sw-eb/software/ncurses/6.4-GCCcore-12.3.0/bin:/apps/sw-eb/software/freetype/2.13.0-GCCcore-12.3.0/bin:/apps/sw-eb/software/Brotli/1.0.9-GCCcore-12.3.0/bin:/apps/sw-eb/software/libpng/1.6.39-GCCcore-12.3.0/bin:/apps/sw-eb/software/expat/2.5.0-GCCcore-12.3.0/bin:/apps/sw-eb/software/bzip2/1.0.8-GCCcore-12.3.0/bin:/apps/sw-eb/software/FFTW/3.3.10-GCC-12.3.0/bin:/apps/sw-eb/software/FlexiBLAS/3.3.1-GCC-12.3.0/bin:/apps/sw-eb/software/binutils/2.40-GCCcore-12.3.0/bin:/apps/sw-eb/software/GCCcore/12.3.0/bin:/rds/general/user/dac23/home/anaconda3/condabin:/usr/lib/qt-3.3/bin:/apps/modules/4.7.1/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/rds/general/user/dac23/home/.dotnet/tools:/opt/ibutils/bin:/opt/pbs/bin:/apps/anaconda3/py310_23.3.1-0
+DOTNET_ROOT=/usr/lib64/dotnet
+S_COLORS=auto
+_CE_M=
+which_declare=declare -f
+MODULES_CMD=/apps/modules/4.7.1/libexec/modulecmd.tcl
+DOTNET_BUNDLE_EXTRACT_BASE_DIR=/rds/general/user/dac23/home/.cache/dotnet_bundle_extract
+PBS_O_WORKDIR=/rds/general/user/dac23/home/HPC_SelfLearn_Project2/Model/Strep_Project2/Math_Model
+USER=dac23
+ENV=/apps/modules/4.7.1/init/profile.sh
+PBS_NODEFILE=/var/spool/PBS/aux/9382036.pbs
+PBS_TASKNUM=1
+PWD=/rds/general/user/dac23/home/HPC_SelfLearn_Project2/Model/Strep_Project2/Math_Model
+HOME=/rds/general/user/dac23/home
+CONDA_PYTHON_EXE=/rds/general/user/dac23/home/anaconda3/bin/python
+PBS_MOMPORT=15003
+WORK=/rds/general/user/dac23/home
+BASH_ENV=/apps/modules/4.7.1/init/bash
+XDG_DATA_DIRS=/rds/general/user/dac23/home/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+_CE_CONDA=
+PBS_JOBCOOKIE=542B80F32EC4C111608D9A7279E111BE
+PBS_O_SHELL=/bin/bash
+TMPDIR=/var/tmp/pbs.9382036.pbs
+LOADEDMODULES=
+PBS_O_QUEUE=v1_short8
+MAIL=/var/spool/mail/dac23
+SHELL=/bin/bash
+DOTNET_CLI_TELEMETRY_OPTOUT=1
+CUDA_VISIBLE_DEVICES=
+SHLVL=2
+PBS_O_HOST=login-a-internal.cx1.hpc.ic.ac.uk
+EPHEMERAL=/rds/general/user/dac23/ephemeral
+PBS_O_SYSTEM=Linux
+MANPATH=::/opt/pbs/share/man
+PBS_O_LOGNAME=dac23
+PBS_NODENUM=0
+MODULEPATH=/etc/scl/modulefiles:/apps/modules/4.7.1/modulefiles
+PBS_JOBDIR=/rds/general/user/dac23/home
+LOGNAME=dac23
+MODULEPATH_modshare=/apps/modules/4.7.1/modulefiles:1
+PATH=/rds/general/user/dac23/home/anaconda3/condabin:/apps/modules/4.7.1/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/rds/general/user/dac23/home/.dotnet/tools:/opt/pbs/bin
+PBS_QUEUE=v1_short8
+MODULESHOME=/usr/share/Modules
+HISTSIZE=1000
+RDS_PROJECT=/rds/general/project/
+PBS_O_MAIL=/var/spool/mail/dac23
+OMP_NUM_THREADS=1
+LESSOPEN=||/usr/bin/lesspipe.sh %s
+BASH_FUNC_which%%=() {  ( alias;
+ eval ${which_declare} ) | /usr/bin/which --tty-only --read-alias --read-functions --show-tilde --show-dot "$@"
+}
+BASH_FUNC_module%%=() {  unset _mlshdbg;
+ if [ "${MODULES_SILENT_SHELL_DEBUG:-0}" = '1' ]; then
+ case "$-" in 
+ *v*x*)
+ set +vx;
+ _mlshdbg='vx'
+ ;;
+ *v*)
+ set +v;
+ _mlshdbg='v'
+ ;;
+ *x*)
+ set +x;
+ _mlshdbg='x'
+ ;;
+ *)
+ _mlshdbg=''
+ ;;
+ esac;
+ fi;
+ unset _mlre _mlIFS;
+ if [ -n "${IFS+x}" ]; then
+ _mlIFS=$IFS;
+ fi;
+ IFS=' ';
+ for _mlv in ${MODULES_RUN_QUARANTINE:-};
+ do
+ if [ "${_mlv}" = "${_mlv##*[!A-Za-z0-9_]}" -a "${_mlv}" = "${_mlv#[0-9]}" ]; then
+ if [ -n "`eval 'echo ${'$_mlv'+x}'`" ]; then
+ _mlre="${_mlre:-}${_mlv}_modquar='`eval 'echo ${'$_mlv'}'`' ";
+ fi;
+ _mlrv="MODULES_RUNENV_${_mlv}";
+ _mlre="${_mlre:-}${_mlv}='`eval 'echo ${'$_mlrv':-}'`' ";
+ fi;
+ done;
+ if [ -n "${_mlre:-}" ]; then
+ eval `eval ${_mlre} /usr/bin/tclsh /apps/modules/4.7.1/libexec/modulecmd.tcl bash '"$@"'`;
+ else
+ eval `/usr/bin/tclsh /apps/modules/4.7.1/libexec/modulecmd.tcl bash "$@"`;
+ fi;
+ _mlstatus=$?;
+ if [ -n "${_mlIFS+x}" ]; then
+ IFS=$_mlIFS;
+ else
+ unset IFS;
+ fi;
+ unset _mlre _mlv _mlrv _mlIFS;
+ if [ -n "${_mlshdbg:-}" ]; then
+ set -$_mlshdbg;
+ fi;
+ unset _mlshdbg;
+ return $_mlstatus
+}
+BASH_FUNC_scl%%=() {  if [ "$1" = "load" -o "$1" = "unload" ]; then
+ eval "module $@";
+ else
+ /usr/bin/scl "$@";
+ fi
+}
+BASH_FUNC_ml%%=() {  module ml "$@"
+}
+_=/bin/printenv
