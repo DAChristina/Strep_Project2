@@ -28,6 +28,7 @@ pars <- list(dt = 1,
              D_ini = 0,
              beta_0 = 0.25, # based on mcmc run, prior = (1/15.75)*1.2,
              beta_1 = 0.8,
+             vacc = 0.9, # Infant vaccination coverage
              delta = (1/60), # incubation period, trial random number
              qu = 0.23, # When clinical symptoms occur, (1-qu) = no clinical symptoms detected
              sigma = (1/15.75) # carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
