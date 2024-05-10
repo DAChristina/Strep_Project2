@@ -26,11 +26,11 @@ pars <- list(dt = 1,
              S_ini = 6e7, # England's pop size is roughly 67,000,000
              A_ini = 100,
              D_ini = 0,
-             beta_0 = 0.25, # based on mcmc run, prior = (1/15.75)*1.2,
-             beta_1 = 0.8,
+             beta_0 = 0.01,
+             beta_1 = 0.5,
              vacc = 0.9, # Infant vaccination coverage
-             delta = (1/60), # incubation period, trial random number
-             qu = 0.23, # When clinical symptoms occur, (1-qu) = no clinical symptoms detected
+             delta = (1/90), # incubation period, trial random number
+             qu = 0.002, # When clinical symptoms occur, (1-qu) = no clinical symptoms detected
              sigma = (1/15.75) # carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
@@ -76,6 +76,15 @@ matlines(time, t(x[3, , ]), col = cols[["D"]], lty = 1)
 legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
 max(x[5,,]) # Check max n_AD_daily
 max(x[3,,]) # Check max D
-pars$beta_0/(pars$delta) + (pars$qu*pars$delta)/(pars$delta*pars$sigma) # print R0
+
+# R0 estimation (R0 changes due to seasonality)
+time <- seq(1, 5000, 1)
+time_shift <- 70
+R0 <- pars$beta_0*(1+pars$beta_1*sin(2*pi*(time_shift+time)/365))/(pars$delta) + (pars$qu*pars$delta)/(pars$delta*pars$sigma) # print R0
+max(R0)
+min(R0)
+# plot(time, R0)
+# pars$beta_1/(pars$delta) + (pars$qu*pars$delta)/(pars$delta*pars$sigma) # print R0
+
 
 write.csv(x, file="Output_sir_result.csv", row.names =T)
