@@ -10,6 +10,7 @@ A_ini <- user(0) # required in mcState
 D_ini <- user(10) # required in mcState
 beta_0 <- user(0.5)
 beta_1 <- user(0.01)
+vacc <- user(0.9) # vaccination coverage for infants
 delta <- user(0.2) # required in mcState
 qu <- user(1/15.75) # fixed per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 sigma <- user((1/15.75)*3) # assumed as acute phase
@@ -26,7 +27,9 @@ initial(n_AD_cumul) <- rbinom(A_ini, p_AD)
 
 # 3. UPDATES ###################################################################
 N <- S + A + D + R
-beta <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
+beta_temporary <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
+# Infant vaccination coverage occurs when PCV13 introduced in April 2010 (day 2648 from 01.01.2003)
+beta <- if (time >= 2648) beta_temporary*(1-vacc) else beta_temporary
 lambda <- beta*D/N
 
 # Individual probabilities of transition
