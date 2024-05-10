@@ -31,7 +31,7 @@ beta_temporary <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
 # Infant vaccination coverage occurs when PCV13 introduced in April 2010 (day 2648 from 01.01.2003)
 # https://fingertips.phe.org.uk/search/vaccination#page/4/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/30306/age/30/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1/page-options/tre-do-0
 beta <- if (time >= 2648) beta_temporary*(1-vacc) else beta_temporary
-lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased individuals
+lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased people
 
 # Individual probabilities of transition
 p_SA <- 1- exp(-lambda * dt)
