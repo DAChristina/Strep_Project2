@@ -6,14 +6,14 @@ initial(time) <- 0
 
 # 1. PARAMETERS ################################################################
 S_ini <- user(6e7) # required in mcState
-A_ini <- user(0) # required in mcState
-D_ini <- user(10) # required in mcState
-beta_0 <- user(0.5)
-beta_1 <- user(0.01)
-vacc <- user(0.9) # vaccination coverage for infants
-delta <- user(0.2) # required in mcState
-qu <- user(1/15.75) # fixed per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-sigma <- user((1/15.75)*3) # assumed as acute phase
+A_ini <- user(100) # required in mcState
+D_ini <- user(0) # required in mcState
+beta_0 <- user(0.01)
+beta_1 <- user(0.9)
+vacc <- user(0.9*0.862) # vaccination coverage * efficacy for infants
+delta <- user(1/2000) # required in mcState
+qu <- user(0.0002)
+sigma <- user(1/15.75) # assumed as acute phase, fixed per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 pi <- user(3.141593)
 time_shift <- user(70)
 
@@ -31,7 +31,7 @@ beta_temporary <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
 # Infant vaccination coverage occurs when PCV13 introduced in April 2010 (day 2648 from 01.01.2003)
 # https://fingertips.phe.org.uk/search/vaccination#page/4/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/30306/age/30/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1/page-options/tre-do-0
 beta <- if (time >= 2648) beta_temporary*(1-vacc) else beta_temporary
-lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased people
+lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased individuals
 
 # Individual probabilities of transition
 p_SA <- 1- exp(-lambda * dt)
