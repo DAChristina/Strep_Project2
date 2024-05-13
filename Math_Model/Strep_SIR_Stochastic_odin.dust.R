@@ -27,10 +27,13 @@ pars <- list(dt = 1,
              A_ini = 100,
              D_ini = 0,
              beta_0 = 0.01,
-             beta_1 = 0.5,
-             vacc = 0.9, # Infant vaccination coverage
-             delta = (1/90), # incubation period, trial random number
-             qu = 0.002, # When clinical symptoms occur, (1-qu) = no clinical symptoms detected
+             beta_1 = 0.9,
+             vacc = 0.9*0.862, # Infant vaccination coverage in UK * 86.2% protection efficacy
+             # for +6PCV13 only, assume 2 PCV13 doses for infant age 4-11 months
+             # (https://academic.oup.com/cid/article/73/7/e1423/6042567?login=true)
+             delta = (1/2000), # Previously assumed 90 days, lit study suggest 2000 days required for acquisition
+             # (https://academic.oup.com/jid/article/206/7/1020/806330)
+             qu = 0.0002, # Probability when clinical symptoms occur, (1-qu) = no clinical symptoms detected
              sigma = (1/15.75) # carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
@@ -65,9 +68,9 @@ cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily
 # matplot(time, t(x[1, , ]), type = "l",
 #         xlab = "Time", ylab = "Number of individuals",
 #         col = cols[["S"]], lty = 1, ylim = range(x))
-matplot(time, t(x[2, , ]), type = "l",
+matplot(time, t(x[3, , ]), type = "l",
                 xlab = "Time", ylab = "Number of individuals",
-                col = cols[["A"]], lty = 1)#, ylim = max(x[2,,]))
+                col = cols[["D"]], lty = 1)#, ylim = max(x[2,,]))
 # matlines(time, t(x[2, , ]), col = cols[["A"]], lty = 1)
 matlines(time, t(x[3, , ]), col = cols[["D"]], lty = 1)
 # matlines(time, t(x[4, , ]), col = cols[["R"]], lty = 1)
@@ -78,7 +81,7 @@ max(x[5,,]) # Check max n_AD_daily
 max(x[3,,]) # Check max D
 
 # R0 estimation (R0 changes due to seasonality)
-time <- seq(1, 5000, 1)
+time <- n_times
 time_shift <- 70
 R0 <- pars$beta_0*(1+pars$beta_1*sin(2*pi*(time_shift+time)/365))/(pars$delta) + (pars$qu*pars$delta)/(pars$delta*pars$sigma) # print R0
 max(R0)
