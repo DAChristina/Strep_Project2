@@ -14,6 +14,8 @@ vacc <- user(0.9*0.862) # vaccination coverage * efficacy for infants
 delta <- user(1/2000) # required in mcState
 qu <- user(0.0002)
 sigma <- user(1/15.75) # assumed as acute phase, fixed per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+mu_0 <- user(0) # background mortality, assumed as closed system
+mu_1 <- user(192/(4064*4745)) # disease-associated mortality; ratio 192/4064 in 4745 days
 pi <- user(3.141593)
 time_shift <- user(70)
 
@@ -39,6 +41,7 @@ p_Asym <- 1 - exp(-delta * dt)
 p_AD <- 1- exp(-(qu * dt)) # cumulative prob of (delta*qu + (delta*(1-qu))) = delta, delta*qu/delta = qu
 p_AR <- 1- exp(-((1-qu) * dt)) # cumulative prob of (delta*qu + (delta*(1-qu))) = delta, delta*(1-qu)/delta = (1-qu)
 p_DR <- 1- exp(-sigma * dt)
+p_Dd <- 1- exp(-(mu_0+mu_1) * dt) # disease-associated mortality
 
 # Draws for numbers changing between compartments
 n_SA <- rbinom(S, p_SA)
@@ -46,13 +49,14 @@ n_Asym <- rbinom(A, p_Asym) # n_Asym <- n_AD + n_AR
 n_AD <- rbinom(n_Asym, p_AD)
 n_AR <- rbinom(n_Asym, p_AR)
 n_DR <- rbinom(D, p_DR)
+n_Dd <- rbinom(D, p_Dd)
 
 # The transitions
 update(time) <- (step + 1) * dt
 update(S) <- S - n_SA
 update(A) <- A + n_SA - (n_AD + n_AR)
 update(D) <- D + n_AD - n_DR
-update(R) <- R + n_AR + n_DR
+update(R) <- R + n_AR + n_DR - n_Dd
 # that "little trick" previously explained in https://github.com/mrc-ide/dust/blob/master/src/sir.cpp for cumulative incidence:
 update(n_AD_daily) <- n_AD
 update(n_AD_cumul) <- n_AD + D + (R - n_AR) # no interest in asymptomatic cases that've recovered
