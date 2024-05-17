@@ -34,7 +34,6 @@ if (!require(odin.dust, quietly=T)){
 
 library(tidyverse)
 library(readxl)
-library(incidence)
 library(coda)
 ```
 
@@ -164,6 +163,7 @@ legend("topleft", names(col_imD), fill = col_imD, bty = "n")
 ```
 
 ## 2. Data Fitting
+
 The anatomy of an mcstate particle filter, as noted above, consists of three main components: \n 
 1. A set of observations to fit the model to, generated using mcstate::particle_filter_data(). \n 
 2. A model to fit, which must be a dust generator, either dust::dust() or odin.dust::odin_dust(). \n 
@@ -206,14 +206,20 @@ gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 ```{r}
 # This is part of sir odin model:
 pars <- list(dt = 1,
-             S_ini = 1e5,
-             I_ini = 10,
-             beta = (1/15.75)*1.2
-             # sigma = (1/15.75) # carriage duration = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+             S_ini = 6e7, # England's pop size is roughly 67,000,000
+             A_ini = 10,
+             D_ini = 0,
+             time_shift = 70,
+             beta_0 = 0.1,
+             beta_1 = 0.6,
+             delta = (1/1000), # Probability of people developing disease
+             # (https://academic.oup.com/jid/article/206/7/1020/806330)
+             sigma_1 = (1/15.75), # fixed per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+             sigma_2 = (1/1) # assumed as acute phase
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
 gen_sir$new(pars = pars,
-            time = 1,
+            time = 0,
             n_particles = 1L,
             n_threads = 4L,
             seed = 1L)$info()
@@ -227,21 +233,23 @@ gen_sir$new(pars = pars,
 case_compare <- function(state, observed, pars = NULL) {
   exp_noise <- 1e6
 
-  incidence_modelled <- state[5, , drop = TRUE] # in the example, the 5th row is cases_inc (n_SI_daily)
-  incidence_observed <- observed$cases # daily new cases
+  incidence_modelled <- state[5, , drop = TRUE] # in the example, the 5th row is cases_inc (n_SI_daily), time column deleted
+  incidence_observed <- observed$cases
+  # invasiveness <- incidence_modelled +
+  #   rlnorm(n = length(incidence_modelled), meanlog = -5, sdlog = 0.45) # logN(-5, 0.45) (Dvog et al.???)
   lambda <- incidence_modelled +
-    rexp(n = length(incidence_modelled), rate = exp_noise)
-  dpois(x = incidence_observed, lambda = lambda, log = TRUE)
+    rexp(n = length(incidence_modelled), rate = exp_noise) # based on mcState example
+  dpois(x = incidence_observed*, lambda = lambda, log = TRUE) # observed$cases = daily new cases
 }
 ```
 
 ```{r}
 # If use SIR example the calculation below is not required:
 incidence_compare <- function(state, prev_state, observed, pars = NULL) {
-  exp_noise <- 1e6
+  # exp_noise <- 1e6
 
-  lambda <- state[6, , drop = TRUE] +
-    rexp(n = length(incidence_modelled), rate = exp_noise) # lambda = n_SI_cumul + rexp(incid, rate)
+  lambda <- state[2, , drop = TRUE] + state[3, , drop = TRUE] # change lambda into Asymptomatic + Diseased
+  #   rexp(n = length(incidence_modelled), rate = exp_noise) # lambda = n_SI_cumul + rexp(incid, rate), time data reduced
   dpois(x = observed$cases, lambda = lambda, log = TRUE)
 }
 
@@ -258,7 +266,7 @@ see: https://mrc-ide.github.io/mcstate/articles/restart.html
 # with number of rows equivalent to the current output, day = nrow(all_date)
 # transpose is not required because this is the output of sir.odin
 sir_model <- gen_sir$new(pars = pars,
-                         time = 1,
+                         time = 0,
                          n_particles = 1L,
                          n_threads = 4L,
                          seed = 1L)
@@ -286,17 +294,17 @@ glimpse(sir_output)
 # seems like they combine the SIR model output with n_SI_daily from the model,
 # make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
 # create a new matrix with initial state (t1 = 0)
-begin_t0_value <- c(1e5, 0, 0, 0, 0)  # Receall S_ini in Pars
+begin_t0_value <- c(pars$S_ini, 0, 0, 0, 0, 0)  # Receall S_ini in Pars
 # begin_t0 <- array(begin_t0_value, dim = c(5, 1, 1))
-begin_t0 <- matrix(nrow = 4, ncol = 1, data = begin_t0_value)
+begin_t0 <- matrix(nrow = 6, ncol = 1, data = begin_t0_value)
 
 # The sir_output with t1 = 1
-chosen_output <- sir_output[1:4, ]
+chosen_output <- sir_output[1:6, ]
 bindedMtx <- as.matrix(chosen_output)
 
 # Combine
 true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
-true_history <- array(bindedMtx, dim = c(4, 1, length(all_date)+1))
+true_history <- array(bindedMtx, dim = c(6, 1, length(all_date)+1))
 glimpse(true_history)
 # ori_history <- array(bindedMtx, dim = c(4, 1, length(all_date))) # 1-4 means S, I, R, n_SI_daily
 # true_history <- array(c(begin_t0, ori_history), dim = c(dim(begin_t0)[1], dim(ori_history)[2], length(all_date)+1)) # 3-d matrices bind
@@ -311,12 +319,12 @@ plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
   }
 
   par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-  cols <- c(S = "#8c8cd9", I = "#cc0044", R = "#999966")
+  cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
   matplot(times, t(history[2, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
           xlab = "Time", ylab = "Number of individuals",
           col = cols[["S"]], lty = 1, ylim = range(history))
-  matlines(times, t(history[3, , -1]), col = cols[["I"]], lty = 1)
-  matlines(times, t(history[4, , -1]), col = cols[["R"]], lty = 1)
+  matlines(times, t(history[3, , -1]), col = cols[["A"]], lty = 1)
+  matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
   matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
             col = cols)
   legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
@@ -333,17 +341,13 @@ filter <- mcstate::particle_filter$new(data = sir_data,
 
 # recall pars but dt = dt, and dt <- 1
 dt <- 1
-filter$run(save_history = TRUE, pars = list(dt = dt,
-                                            S_ini = 1e5,
-                                            I_ini = 10,
-                                            beta = (1/15.75)*1.2
-                                            # sigma = (1/15.75) 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-))
+filter$run(save_history = TRUE, pars = pars)
 
 plot_particle_filter(filter$history(), true_history, incidence$day)
 ```
 
 ## 3. MCMC Run
+
 ```{r}
 # Using MCMC to Infer Parameters (Metropolis-Hastings):
 # first time I run the code & it requires ~10' for 500 steps, 200 burnin
@@ -357,14 +361,19 @@ plot_particle_filter(filter$history(), true_history, incidence$day)
 # Serotype	invasiveness	invasiveness_lower	invasiveness_upper
 # 1	0.019837434032008	0.007774465457634	0.057617171798831
 
-# For this trial I use the mean number of invasiveness estimate:
-beta <- mcstate::pmcmc_parameter("beta", (1/15.75)*1.2, min = 0.01860361/365) # Invasiveness per carrier per day
-# sigma <- mcstate::pmcmc_parameter("sigma", (1/15.75), min = 0, prior = function(p)
-#   dgamma(p, shape = 1, scale = 0.2, log = TRUE))
+# For this trial I use the mean number of invasiveness estimate: min = 0.01860361/365) # Invasiveness per carrier per day
+time_shift <- mcstate::pmcmc_parameter("time_shift", pars$time_shift)
+beta_0 <- mcstate::pmcmc_parameter("beta_0", pars$beta_0)
+beta_1 <- mcstate::pmcmc_parameter("beta_1", pars$beta_1)
+delta <- mcstate::pmcmc_parameter("delta", pars$delta, min = 0, prior = function(d)
+  dgamma(d, shape = 1, scale = 0.2, log = T)
+  )
 
-# proposal_matrix <- diag(0.1, 2)
-proposal_matrix <- as.matrix(0.1)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(beta = beta),# sigma = sigma),
+proposal_matrix <- diag(0.1, 4)
+mcmc_pars <- mcstate::pmcmc_parameters$new(list(time_shift = time_shift,
+                                                beta_0 = beta_0,
+                                                beta_1 = beta_1,
+                                                delta = delta),
                                            proposal_matrix)
 
 
