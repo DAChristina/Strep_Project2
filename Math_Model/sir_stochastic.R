@@ -66,5 +66,5 @@ update(D) <- D + n_AD - (n_DR + n_Dd)
 update(R) <- R + n_AR + n_DR
 # that "little trick" previously explained in https://github.com/mrc-ide/dust/blob/master/src/sir.cpp for cumulative incidence:
 # based on tutorial: https://mrc-ide.github.io/odin-dust-tutorial/mcstate.html#/the-model
-update(n_AD_daily) <- n_AD #if (step %% freq == 0) n_AD else n_AD_daily + n_AD
+update(n_AD_daily) <- if (step %% freq == 0) n_AD else n_AD_daily + n_AD
 update(n_AD_cumul) <- n_AD_cumul + n_AD # no interest in asymptomatic cases that've recovered
