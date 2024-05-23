@@ -327,8 +327,8 @@ beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
 # shape into prior mean^2/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
 # scale into prior mean/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
 
-log_delta <- mcstate::pmcmc_parameter("log_delta", (1e-4), min = 0, prior = function(p)
-  dunif(p, min = -5, max = 0.45, log = TRUE)) # uniform distribution (Lochen et al., 2022)
+log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), min = -5, prior = function(p)
+  dunif(p, min = -5, max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
 
 proposal_matrix <- diag(0.1, 4) # assumption no co-variance occur
 # proposal_matrix <- as.matrix(0.1)
