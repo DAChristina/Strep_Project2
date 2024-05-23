@@ -1,13 +1,13 @@
 #!/bin/bash
 
-#PBS -l walltime=08:00:00
-#PBS -l select=1:ncpus=1:mem=8gb
+#PBS -l walltime=72:00:00
+#PBS -l select=1:ncpus=1:mem=16gb
 
 source ~/anaconda3/etc/profile.d/conda.sh
 
 cd $PBS_O_WORKDIR
 #mkdir /trialFolder # Failed
-conda run -n R_envConda Rscript Strep_dataFitting_mcState.R > myresult.txt
+conda run -n R_envConda Rscript Strep_dataFitting_mcState_1000iter.R > myresult_1000iter.txt
 #mv *.pdf myresult.txt $PBS_O_WORKDIR
 
 printenv > myenv.txt
