@@ -143,6 +143,9 @@ legend("topleft", names(col_imD), fill = col_imD, bty = "n")
 incidence <- Natm_n_imD %>% 
   select(day, counts_Ser1) %>% 
   rename(cases = counts_Ser1) # That annoying name
+
+hist(incidence$cases) # huge zero daily cases occur
+
 # To make my life easier I compile the Serotype 1 cases into a new object called sir_data
 # data is fed as an input to mcstate::particle_filter_data
 dt <- 1 # rate must be an integer; 0.25 to make it 4 days, I make it 1
@@ -200,12 +203,15 @@ index(mod$info())
 
 ## 2b. The Comparison Function #################################################
 # Further details: https://mrc-ide.github.io/mcstate/articles/sir_models.html
+# based on tutorial: https://mrc-ide.github.io/odin-dust-tutorial/mcstate.html#/the-model
+# SEE the location of n_AD_daily from:
 # gen_sir$new(pars = list(), time = 0, n_particles = 1L)$info()
+# (ABOVE)
 
 case_compare <- function(state, observed, pars = NULL) {
-  exp_noise <- 1e6
+  exp_noise <- 1e4
   
-  incidence_modelled <- state[6, , drop = TRUE] # (incidence based on model "n_AD_daily")
+  incidence_modelled <- state[6, , drop = TRUE] # (incidence based on model's "n_AD_daily" from gen_sir)
   incidence_observed <- observed$cases # daily new cases
   lamb <- incidence_modelled +
     rexp(n = length(incidence_modelled), rate = exp_noise)
@@ -362,14 +368,14 @@ mcmc_pars <- mcstate::pmcmc_parameters$new(list(time_shift = time_shift,
                                            proposal_matrix)
 
 
-n_steps <- 500
+n_steps <- 5000
 n_burnin <- n_steps/2
 
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  # rerun_every = 7,
+  rerun_every = 7,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
@@ -391,14 +397,10 @@ coda::effectiveSize(mcmc1)
 
 # Autocorrelation plots
 print("Autocorrelation of mcmc1?")
-AuCorr_time_shift <- coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
-AuCorr_time_shift
-AuCorr_beta_0 <- coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
-AuCorr_beta_0
-AuCorr_beta_1 <- coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
-AuCorr_beta_1
-AuCorr_log_delta <- coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
-AuCorr_log_delta
+coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
+coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
+coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
 
 ## 3a. Tuning the pMCMC part 1 #################################################
 # Use the covariance of the state as the proposal matrix:
@@ -415,7 +417,7 @@ control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  # rerun_every = 7,
+  rerun_every = 7,
   progress = TRUE,
   n_chains = 4)
 pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
