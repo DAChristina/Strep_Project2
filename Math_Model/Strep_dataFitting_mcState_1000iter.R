@@ -390,7 +390,7 @@ coda::effectiveSize(mcmc1)
 1 - coda::rejectionRate(mcmc1)
 
 # Autocorrelation plots
-print("Autocorrelation?")
+print("Autocorrelation of mcmc1?")
 AuCorr_time_shift <- coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
 AuCorr_time_shift
 AuCorr_beta_0 <- coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
@@ -399,6 +399,7 @@ AuCorr_beta_1 <- coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1"
 AuCorr_beta_1
 AuCorr_log_delta <- coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
 AuCorr_log_delta
+
 ## 3a. Tuning the pMCMC part 1 #################################################
 # Use the covariance of the state as the proposal matrix:
 proposal_matrix <- cov(pmcmc_run$pars)
@@ -425,7 +426,7 @@ mcmc2 <- coda::as.mcmc(cbind(
 summary(mcmc2)
 plot(mcmc2)
 
-print("Tuning Result Effective Size & Rejection Rate")
+print("Tuning Result Effective Size & Rejection Rate of mcmc2")
 coda::effectiveSize(mcmc2)
 1 - coda::rejectionRate(mcmc2)
 
@@ -454,6 +455,9 @@ mcmc_chains <- lapply(chains, function(chain) {
 
 # Combine chains into a list
 mcmc_chains_list <- do.call(mcmc.list, mcmc_chains)
+
+print("Covariance matrix of mcmc2")
+cov(as.matrix(mcmc_chains_list))
 
 print("Gelman-Rubin diagnostic")
 coda::gelman.plot(mcmc_chains_list,
