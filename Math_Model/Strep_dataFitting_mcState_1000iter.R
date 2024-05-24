@@ -180,13 +180,32 @@ gen_sir$new(pars = pars,
             n_threads = 4L,
             seed = 1L)$info()
 
+# https://mrc-ide.github.io/odin-dust-tutorial/mcstate.html#/the-model-over-time
+mod <- gen_sir$new(pars, 0, 20)
+y <- mod$simulate(c(0, sir_data$time_end))
+i <- mod$info()$index[["time"]]
+j <- mod$info()$index[["n_AD_daily"]]
+matplot(y[i, 1, ], t(y[j, , ]), type = "l", col = "#00000055", lty = 1, las = 1,
+        xlab = "Day", ylab = "Cases")
+points(cases ~ day, incidence, col = "red", pch = 19)
+
+index <- function(info) {
+  list(run = c(incidence = info$index$n_AD_daily),
+       state = c(t = info$index$time,
+                 D = info$index$D,
+                 n_AD_daily = info$index$n_AD_daily))
+}
+index(mod$info())
+
 
 ## 2b. The Comparison Function #################################################
 # Further details: https://mrc-ide.github.io/mcstate/articles/sir_models.html
+# gen_sir$new(pars = list(), time = 0, n_particles = 1L)$info()
+
 case_compare <- function(state, observed, pars = NULL) {
   exp_noise <- 1e6
   
-  incidence_modelled <- state[6, , drop = TRUE] # (n_AD_daily)
+  incidence_modelled <- state[6, , drop = TRUE] # (incidence based on model "n_AD_daily")
   incidence_observed <- observed$cases # daily new cases
   lamb <- incidence_modelled +
     rexp(n = length(incidence_modelled), rate = exp_noise)
@@ -270,12 +289,12 @@ plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
   # matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
   # matlines(times, t(history[5, , -1]), col = cols[["R"]], lty = 1)
   matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
-            col = cols)
+            col = "green")
   legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
 }
 
 # Inferring Parameters
-n_particles <- 100
+n_particles <- 500 # I increase the particles from 100 to 500
 filter <- mcstate::particle_filter$new(data = sir_data,
                                        model = gen_sir, # Changing gen_sir into sir_model (with updated parameters that I can control) produce error:
                                        # Error in initialize(...) : 'model' must be a dust_generator
@@ -320,14 +339,18 @@ plot_particle_filter(filter$history(), true_history, incidence$day)
 time_shift <- mcstate::pmcmc_parameter("time_shift", 71.88781655, min = 0, prior = function(s)
   dunif(s, min = 0, max = 365/2, log = TRUE)) # ~Uniform[0,365/2]
 beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, prior = function(q)
-  dgamma(q, shape = (((pars$beta_0)^2)/0.1), scale = (((pars$beta_0))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+  dgamma(q, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
-  dgamma(r, shape = (((pars$beta_1)^2)/0.1), scale = (((pars$beta_1))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+  dgamma(r, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 # For dGamma, I change:
 # shape into prior mean^2/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
 # scale into prior mean/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
+# beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, prior = function(q)
+#   dgamma(q, shape = (((pars$beta_0)^2)/0.1), scale = (((pars$beta_0))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+# beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
+#   dgamma(r, shape = (((pars$beta_1)^2)/0.1), scale = (((pars$beta_1))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 
-log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), min = -5, prior = function(p)
+log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), prior = function(p)
   dunif(p, min = -5, max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
 
 proposal_matrix <- diag(0.1, 4) # assumption no co-variance occur
@@ -339,14 +362,14 @@ mcmc_pars <- mcstate::pmcmc_parameters$new(list(time_shift = time_shift,
                                            proposal_matrix)
 
 
-n_steps <- 1000
+n_steps <- 500
 n_burnin <- n_steps/2
 
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  # rerun_every = 100,
+  # rerun_every = 7,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
@@ -360,12 +383,23 @@ summary(mcmc1)
 plot(mcmc1)
 
 
-## 3a. Tuning the pMCMC part 1 #################################################
+# Diagnostics TRIAL ############################################################
 # coz usually the first run is not efficient (in terms of effective sample size per iteration)
 print("pMCMC Effective Size & Rejection Rate")
 coda::effectiveSize(mcmc1)
 1 - coda::rejectionRate(mcmc1)
 
+# Autocorrelation plots
+print("Autocorrelation?")
+AuCorr_time_shift <- coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+AuCorr_time_shift
+AuCorr_beta_0 <- coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
+AuCorr_beta_0
+AuCorr_beta_1 <- coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
+AuCorr_beta_1
+AuCorr_log_delta <- coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
+AuCorr_log_delta
+## 3a. Tuning the pMCMC part 1 #################################################
 # Use the covariance of the state as the proposal matrix:
 proposal_matrix <- cov(pmcmc_run$pars)
 mcmc_pars <- mcstate::pmcmc_parameters$new(
@@ -380,7 +414,7 @@ control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  # rerun_every = 100,
+  # rerun_every = 7,
   progress = TRUE,
   n_chains = 4)
 pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
@@ -394,5 +428,47 @@ plot(mcmc2)
 print("Tuning Result Effective Size & Rejection Rate")
 coda::effectiveSize(mcmc2)
 1 - coda::rejectionRate(mcmc2)
+
+# Gelman-Rubin diagnostic
+# https://cran.r-project.org/web/packages/coda/coda.pdf
+# Extract the number of chains
+n_chains <- control$n_chains
+
+# Determine the length of each chain
+n_samples <- nrow(pmcmc_tuned_run$pars) / n_chains
+
+# Split the parameter samples and probabilities by chains
+chains <- lapply(1:n_chains, function(i) {
+  start <- (i - 1) * n_samples + 1
+  end <- i * n_samples
+  list(
+    pars = pmcmc_tuned_run$pars[start:end, ],
+    probabilities = pmcmc_tuned_run$probabilities[start:end, ]
+  )
+})
+
+# Convert chains to mcmc objects
+mcmc_chains <- lapply(chains, function(chain) {
+  as.mcmc(cbind(chain$probabilities, chain$pars))
+})
+
+# Combine chains into a list
+mcmc_chains_list <- do.call(mcmc.list, mcmc_chains)
+
+print("Gelman-Rubin diagnostic")
+coda::gelman.plot(mcmc_chains_list,
+                  bin.width = 10,
+                  max.bins = 50,
+                  confidence = 0.95,
+                  transform = FALSE,
+                  autoburnin=TRUE,
+                  auto.layout = TRUE)
+# ask, col, lty, xlab, ylab, type, ...)
+
+coda::gelman.diag(mcmc_chains_list,
+                  confidence = 0.95,
+                  transform=FALSE,
+                  autoburnin=TRUE,
+                  multivariate=F) # Change multivariate = F instead of T
 
 ## 4. Running predictions
