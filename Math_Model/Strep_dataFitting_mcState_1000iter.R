@@ -240,64 +240,64 @@ sir_model <- gen_sir$new(pars = pars,
                          n_threads = 4L,
                          seed = 1L)
 
-# update_state is required "every single time" to run & produce matrix output (don't know why)
-sir_model$update_state(pars = pars,
-                       time = 0) # make sure time is 0
-
-all_date <- incidence$day
-n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
-n_particles <- 1
-sir_output <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
-
-for (t in seq_len(n_times)) {
-  sir_output[ , , t] <- sir_model$run(t)
-}
-time <- sir_output[1, 1, ] # because in the position of [1, 1, ] is time
-sir_output <- sir_output[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
-glimpse(sir_output)
-
-
-# weird things happen here. true_history example:
-# true_history <- readRDS("sir_true_history.rds")
-# seems like they combine the SIR model output with n_SI_daily from the model,
-# make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
-# create a new matrix with initial state (t1 = 0)
-begin_t0_value <- c(6e7, 0, 0, 0, 0, 0)  # Receall S_ini in Pars
-# begin_t0 <- array(begin_t0_value, dim = c(5, 1, 1))
-begin_t0 <- matrix(nrow = 6, ncol = 1, data = begin_t0_value)
-
-# The sir_output with t1 = 1
-chosen_output <- sir_output[1:6, ]
-bindedMtx <- as.matrix(chosen_output)
-
-# Combine
-true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
-true_history <- array(bindedMtx, dim = c(6, 1, length(all_date)+1))
-glimpse(true_history)
-# ori_history <- array(bindedMtx, dim = c(4, 1, length(all_date))) # 1-4 means S, I, R, n_SI_daily
-# true_history <- array(c(begin_t0, ori_history), dim = c(dim(begin_t0)[1], dim(ori_history)[2], length(all_date)+1)) # 3-d matrices bind
-
-
-
-
-# recall true_history
-plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
-  if (is.null(obs_end)) {
-    obs_end <- max(times)
-  }
-  
-  par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-  cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
-  matplot(times, t(history[4, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
-          xlab = "Time", ylab = "Number of individuals",
-          col = cols[["D"]], lty = 1) #, ylim = range(history))
-  # matlines(times, t(history[3, , -1]), col = cols[["A"]], lty = 1)
-  # matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
-  # matlines(times, t(history[5, , -1]), col = cols[["R"]], lty = 1)
-  matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
-            col = "green")
-  legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
-}
+# # update_state is required "every single time" to run & produce matrix output (don't know why)
+# # sir_model$update_state(pars = pars,
+# time = 0) # make sure time is 0
+# 
+# all_date <- incidence$day
+# n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+# n_particles <- 1
+# sir_output <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
+# 
+# for (t in seq_len(n_times)) {
+#   sir_output[ , , t] <- sir_model$run(t)
+# }
+# time <- sir_output[1, 1, ] # because in the position of [1, 1, ] is time
+# sir_output <- sir_output[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
+# glimpse(sir_output)
+# 
+# 
+# # weird things happen here. true_history example:
+# # true_history <- readRDS("sir_true_history.rds")
+# # seems like they combine the SIR model output with n_SI_daily from the model,
+# # make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
+# # create a new matrix with initial state (t1 = 0)
+# begin_t0_value <- c(6e7, 0, 0, 0, 0, 0)  # Receall S_ini in Pars
+# # begin_t0 <- array(begin_t0_value, dim = c(5, 1, 1))
+# begin_t0 <- matrix(nrow = 6, ncol = 1, data = begin_t0_value)
+# 
+# # The sir_output with t1 = 1
+# chosen_output <- sir_output[1:6, ]
+# bindedMtx <- as.matrix(chosen_output)
+# 
+# # Combine
+# true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
+# true_history <- array(bindedMtx, dim = c(6, 1, length(all_date)+1))
+# glimpse(true_history)
+# # ori_history <- array(bindedMtx, dim = c(4, 1, length(all_date))) # 1-4 means S, I, R, n_SI_daily
+# # true_history <- array(c(begin_t0, ori_history), dim = c(dim(begin_t0)[1], dim(ori_history)[2], length(all_date)+1)) # 3-d matrices bind
+# 
+# 
+# 
+# 
+# # recall true_history
+# plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
+#   if (is.null(obs_end)) {
+#     obs_end <- max(times)
+#   }
+#   
+#   par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
+#   cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
+#   matplot(times, t(history[4, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
+#           xlab = "Time", ylab = "Number of individuals",
+#           col = cols[["D"]], lty = 1) #, ylim = range(history))
+#   # matlines(times, t(history[3, , -1]), col = cols[["A"]], lty = 1)
+#   # matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
+#   # matlines(times, t(history[5, , -1]), col = cols[["R"]], lty = 1)
+#   matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
+#             col = "green")
+#   legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+# }
 
 # Inferring Parameters
 n_particles <- 500 # I increase the particles from 100 to 500
@@ -323,7 +323,7 @@ filter$run(save_history = TRUE, pars = list(dt = 1,
 ) # Serotype 1 is categorised to have the lowest carriage duration
 )
 
-plot_particle_filter(filter$history(), true_history, incidence$day)
+# plot_particle_filter(filter$history(), true_history, incidence$day)
 
 
 ## 3. MCMC Run #################################################################
@@ -378,7 +378,7 @@ control <- mcstate::pmcmc_control(
   rerun_every = 7,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
-plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
+# plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
 
 processed_chains <- mcstate::pmcmc_thin(pmcmc_run, burnin = n_burnin, thin = 2)
 parameter_mean_hpd <- apply(processed_chains$pars, 2, mean)
