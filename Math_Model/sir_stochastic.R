@@ -13,6 +13,12 @@ time_shift <- user(0)
 beta_0 <- user(0)
 beta_1 <- user(0)
 vacc <- user(0.9*0.862) # FIXED vaccination coverage * efficacy for infants
+
+UK_calibration <- user(0.8066608) # FIXED (Lochen et al., 2022)
+# Children: 1.07638532472038 (it is called delta in the spreadsheet)
+# Adults: 0.536936186788821 (basically gamma)
+# Average: 0.8066608
+
 log_delta <- user(0) # required in mcState
 sigma_1 <- user(1/15.75) # FIXED per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
 sigma_2 <- user(1) # FIXED assumed as acute phase
@@ -36,7 +42,7 @@ beta_temporary <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
 # https://fingertips.phe.org.uk/search/vaccination#page/4/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/30306/age/30/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1/page-options/tre-do-0
 beta <- if (time >= 2648) beta_temporary*(1-vacc) else beta_temporary
 lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased individuals
-delta <- 10^(log_delta)
+delta <- (10^(log_delta))*UK_calibration
 
 # Individual probabilities of transition
 p_SA <- 1- exp(-lambda * dt)
