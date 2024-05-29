@@ -154,7 +154,7 @@ sir_data <- mcstate::particle_filter_data(data = incidence,
                                           rate = 1 / dt)
 rmarkdown::paged_table(sir_data)
 # And ofc to make sure this is Strep's data:
-plot(incidence$day, incidence$cases,
+plot(incidence$day, incidence$cases, col = "deepskyblue3",
      type = "l", xlab = "Day", ylab = "New cases")
 
 
@@ -188,9 +188,9 @@ mod <- gen_sir$new(pars, 0, 20)
 y <- mod$simulate(c(0, sir_data$time_end))
 i <- mod$info()$index[["time"]]
 j <- mod$info()$index[["n_AD_daily"]]
-matplot(y[i, 1, ], t(y[j, , ]), type = "l", col = "#00000055", lty = 1, las = 1,
+matplot(y[i, 1, ], t(y[j, , ]), type = "l", col = "maroon", lty = 1, las = 1,
         xlab = "Day", ylab = "Cases")
-points(cases ~ day, incidence, col = "red", pch = 19)
+points(cases ~ day, incidence, col = "deepskyblue3", pch = 19)
 
 index <- function(info) {
   list(run = c(incidence = info$index$n_AD_daily),
@@ -342,11 +342,11 @@ filter$run(save_history = TRUE, pars = list(dt = 1,
 # 2 Dataset. Invasiveness estimates for serotypes in adults.
 # Serotype	
 # For this trial I use the mean number of invasiveness estimate:
-time_shift <- mcstate::pmcmc_parameter("time_shift", 71.88781655, min = 0, prior = function(s)
-  dunif(s, min = 0, max = 365/2, log = TRUE)) # ~Uniform[0,365/2]
-beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, prior = function(q)
+time_shift <- mcstate::pmcmc_parameter("time_shift", 72.5, min = 72, max = 73, prior = function(s)
+  dunif(s, min = 72, max = 73, log = TRUE)) # ~Uniform[72,73]
+beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, max = 0.8, prior = function(q)
   dgamma(q, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
-beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
+beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, max = 0.8, prior = function(r)
   dgamma(r, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 # For dGamma, I change:
 # shape into prior mean^2/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
@@ -356,8 +356,8 @@ beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
 # beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
 #   dgamma(r, shape = (((pars$beta_1)^2)/0.1), scale = (((pars$beta_1))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 
-log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), prior = function(p)
-  dunif(p, min = -5, max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
+log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), min = (-5), max = 0.7, prior = function(p)
+  dunif(p, min = (-5), max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
 
 proposal_matrix <- diag(0.1, 4) # assumption no co-variance occur
 # proposal_matrix <- as.matrix(0.1)
@@ -368,14 +368,14 @@ mcmc_pars <- mcstate::pmcmc_parameters$new(list(time_shift = time_shift,
                                            proposal_matrix)
 
 
-n_steps <- 5000
+n_steps <- 1000
 n_burnin <- n_steps/2
 
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  rerun_every = 7,
+  rerun_every = 50,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 # plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
@@ -396,11 +396,13 @@ coda::effectiveSize(mcmc1)
 1 - coda::rejectionRate(mcmc1)
 
 # Autocorrelation plots
-print("Autocorrelation of mcmc1?")
+# print("Autocorrelation of mcmc1?")
+par(mfrow = c(2,2))
 coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
 coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
 coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
 coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
+par(mfrow = c(1,1))
 
 ## 3a. Tuning the pMCMC part 1 #################################################
 # Use the covariance of the state as the proposal matrix:
@@ -417,7 +419,7 @@ control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  rerun_every = 7,
+  rerun_every = 50,
   progress = TRUE,
   n_chains = 4)
 pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
@@ -476,5 +478,56 @@ coda::gelman.diag(mcmc_chains_list,
                   transform=FALSE,
                   autoburnin=TRUE,
                   multivariate=F) # Change multivariate = F instead of T
+
+
+# Additional diagnostics #######################################################
+# Source: https://mc-stan.org/bayesplot/reference/MCMC-scatterplots.html
+library("bayesplot")
+
+# MCMC Pairs
+bayesplot::mcmc_pairs(mcmc_chains_list,
+                      pars = c("time_shift", "beta_0", "beta_1", "log_delta"),
+                      off_diag_args = list(size = 0.75))
+
+bayesplot::mcmc_pairs(mcmc_chains_list,
+                      off_diag_args = list(size = 0.75))
+
+pairs(data.frame(mcmc2),
+      main = "Another Pairs Visualisation")
+
+
+# MCMC Scatter Pairs (I take only 3 parms; beta_0, beta_1, and log_delta)
+par(mfrow = c(2,2))
+color_scheme_set("orange")
+beta_0_vs_beta_1 <- bayesplot::mcmc_scatter(
+  mcmc_chains_list, 
+  pars = c("beta_0", "beta_1"),
+  size = 1.5,
+  alpha = 0.25
+)
+beta_0_vs_beta_1 + stat_density_2d(color = "black", size = .5)
+
+beta_0_vs_log_delta <- bayesplot::mcmc_scatter(
+  mcmc_chains_list, 
+  pars = c("beta_0", "log_delta"),
+  size = 1.5,
+  alpha = 0.25
+)
+beta_0_vs_log_delta + stat_density_2d(color = "black", size = .5)
+
+beta_1_vs_log_delta <- bayesplot::mcmc_scatter(
+  mcmc_chains_list, 
+  pars = c("beta_1", "log_delta"),
+  size = 1.5,
+  alpha = 0.25
+)
+beta_1_vs_log_delta + stat_density_2d(color = "black", size = .5)
+
+par(mfrow = c(1,1))
+
+# MCMC Nuts Divergence (unlikely because it needs re-sampling by using stan)
+
+
+
 
 ## 4. Running predictions
