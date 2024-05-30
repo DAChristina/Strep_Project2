@@ -19,6 +19,7 @@ wd = "C:/Users/dac23/Downloads" # library computers
 wd = "/home/ron/Downloads" # personal OSs
 setwd(wd)
 
+
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
@@ -26,9 +27,9 @@ pars <- list(S_ini = 6e7, # England's pop size is roughly 67,000,000
              A_ini = 100,
              D_ini = 0,
              time_shift = 71.88781655,
-             beta_0 = 0.06375,
+             beta_0 = 0.06565,
              beta_1 = 0.07,
-             log_delta = (-4), # will be fitted to logN(-5, 0.7)
+             log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
              sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
              sigma_2 = (1) # FIXED estimated as acute phase
 ) # Serotype 1 is categorised to have the lowest carriage duration
@@ -224,5 +225,4 @@ legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
 max(x[5,,]) # Check max n_AD_daily
 max(x[3,,]) # Check max D
 
-
-write.csv(x, file="Output_sir_result.csv", row.names =T)
+# write.csv(x, file="Output_sir_result.csv", row.names =T)
