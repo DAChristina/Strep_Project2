@@ -6,18 +6,28 @@ dt <- 1/freq
 initial(time) <- 0
 
 # 1. PARAMETERS ################################################################
-S_ini <- user(0) # required in mcState
+S_ini <- user(6e7) # FIXED England's pop size is roughly 67,000,000
 A_ini <- user(0) # required in mcState
 D_ini <- user(0) # required in mcState
 time_shift <- user(0)
 beta_0 <- user(0)
 beta_1 <- user(0)
-vacc <- user(0.9*0.862) # FIXED vaccination coverage * efficacy for infants
 
-UK_calibration <- user(0.8066608) # FIXED (Lochen et al., 2022)
+# Vaccination:
+# https://webarchive.nationalarchives.gov.uk/ukgwa/20211105111851mp_/https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/540290/hpr2416_ppv.pdf
+# https://fingertips.phe.org.uk/search/PPV#page/4/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/30313/age/27/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1
+# vacc_elderly <- 0.7*0.57 # FIXED PPV23 vaccination coverage * efficacy
+# ratio of vaccinated elderly for >64 y.o. people, averaged 69.7243% ~ 70%
+# vacc_kids <- 0.9*0.862*0.01/100 # FIXED PCV13 vaccination coverage * efficacy * proportion of kids below 2 y.o.
+# ratio of vaccinated kids, averaged 90%
+# vacc <- (vacc_elderly + vacc_kids)/2 # FIXED, average
+vacc <- 0.9*0.862*0.01/100 # FIXED PCV13 vaccination coverage * efficacy * proportion of kids below 2 y.o.
+
+# Country calibration:
 # Children: 1.07638532472038 (it is called delta in the spreadsheet)
 # Adults: 0.536936186788821 (basically gamma)
 # Average: 0.8066608
+UK_calibration <- user(0.8066608) # FIXED (Lochen et al., 2022)
 
 log_delta <- user(0) # required in mcState
 sigma_1 <- user(1/15.75) # FIXED per-day, carriage duration (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
@@ -40,6 +50,7 @@ N <- S + A + D + R
 beta_temporary <- beta_0*(1+beta_1*sin(2*pi*(time_shift+time)/365))
 # Infant vaccination coverage occurs when PCV13 introduced in April 2010 (day 2648 from 01.01.2003)
 # https://fingertips.phe.org.uk/search/vaccination#page/4/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/30306/age/30/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1/page-options/tre-do-0
+# https://cran.r-project.org/web/packages/finalsize/vignettes/varying_contacts.html
 beta <- if (time >= 2648) beta_temporary*(1-vacc) else beta_temporary
 lambda <- beta*(A+D)/N # infectious state from Asymtomatic & Diseased individuals
 delta <- (10^(log_delta))*UK_calibration
