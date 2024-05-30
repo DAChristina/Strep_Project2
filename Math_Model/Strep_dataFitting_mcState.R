@@ -1,19 +1,7 @@
 
 ## 1. Data Preparation #########################################################
-if (!require(mcstate, quietly=T)){
-  install.packages("mcstate",
-                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
-  
-  library(mcstate)
-}
-
-if (!require(odin.dust, quietly=T)){
-  install.packages("odin.dust",
-                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
-  
-  library(odin.dust)
-}
-
+library(mcstate)
+library(odin.dust)
 
 library(tidyverse)
 library(readxl)
@@ -165,14 +153,13 @@ plot(incidence$day, incidence$cases, col = "deepskyblue3",
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # This is part of sir odin model:
-pars <- list(dt = 1,
-             S_ini = 6e7, # England's pop size is roughly 67,000,000
+pars <- list(S_ini = 6e7, # England's pop size is roughly 67,000,000
              A_ini = 100,
              D_ini = 0,
              time_shift = 71.88781655,
-             beta_0 = 0.0645,
+             beta_0 = 0.06565,
              beta_1 = 0.07,
-             log_delta = (-4),
+             log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
              sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
              sigma_2 = (1) # FIXED estimated as acute phase
 ) # Serotype 1 is categorised to have the lowest carriage duration
@@ -236,7 +223,7 @@ case_compare <- function(state, observed, pars = NULL) {
 # transpose is not required because this is the output of sir.odin
 sir_model <- gen_sir$new(pars = pars,
                          time = 1,
-                         n_particles = 1L,
+                         n_particles = 15L,
                          n_threads = 4L,
                          seed = 1L)
 
@@ -310,16 +297,16 @@ filter <- mcstate::particle_filter$new(data = sir_data,
 
 # recall pars but dt = dt, and dt <- 1
 dt <- 1
-filter$run(save_history = TRUE, pars = list(dt = 1,
-                                            S_ini = 6e7, # England's pop size is roughly 67,000,000
+
+filter$run(save_history = TRUE, pars = list(S_ini = 6e7, # England's pop size is roughly 67,000,000
                                             A_ini = 100,
                                             D_ini = 0,
                                             time_shift = 71.88781655,
-                                            beta_0 = 0.0645,
+                                            beta_0 = 0.06565,
                                             beta_1 = 0.07,
-                                            log_delta = (-4),
-                                            sigma_1 = (1/15.75), # carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-                                            sigma_2 = (1) # estimated as acute phase
+                                            log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
+                                            sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
+                                            sigma_2 = (1) # FIXED estimated as acute phase
 ) # Serotype 1 is categorised to have the lowest carriage duration
 )
 
@@ -344,19 +331,12 @@ filter$run(save_history = TRUE, pars = list(dt = 1,
 # For this trial I use the mean number of invasiveness estimate:
 time_shift <- mcstate::pmcmc_parameter("time_shift", 72.5, min = 72, max = 73, prior = function(s)
   dunif(s, min = 72, max = 73, log = TRUE)) # ~Uniform[72,73]
-beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, max = 0.8, prior = function(q)
+beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.06565, min = 0, max = 0.8, prior = function(q)
   dgamma(q, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, max = 0.8, prior = function(r)
   dgamma(r, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
-# For dGamma, I change:
-# shape into prior mean^2/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
-# scale into prior mean/variance, given prior mean = init, variance = 0.1 (larger, instead of 0.01)
-# beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.0645, min = 0, prior = function(q)
-#   dgamma(q, shape = (((pars$beta_0)^2)/0.1), scale = (((pars$beta_0))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
-# beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, prior = function(r)
-#   dgamma(r, shape = (((pars$beta_1)^2)/0.1), scale = (((pars$beta_1))/0.1), log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
 
-log_delta <- mcstate::pmcmc_parameter("log_delta", (-4), min = (-5), max = 0.7, prior = function(p)
+log_delta <- mcstate::pmcmc_parameter("log_delta", (-4.7), min = (-5), max = 0.7, prior = function(p)
   dunif(p, min = (-5), max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
 
 proposal_matrix <- diag(0.1, 4) # assumption no co-variance occur
@@ -482,8 +462,8 @@ coda::gelman.diag(mcmc_chains_list,
 
 # Additional diagnostics #######################################################
 # Source: https://mc-stan.org/bayesplot/reference/MCMC-scatterplots.html
-library("bayesplot")
-
+library(bayesplot)
+library(gridExtra)
 # MCMC Pairs
 bayesplot::mcmc_pairs(mcmc_chains_list,
                       pars = c("time_shift", "beta_0", "beta_1", "log_delta"),
@@ -525,9 +505,45 @@ beta_1_vs_log_delta + stat_density_2d(color = "black", size = .5)
 
 par(mfrow = c(1,1))
 
-# MCMC Nuts Divergence (unlikely because it needs re-sampling by using stan)
+# MCMC Divergence (re-sampling by using pmcmc_sample)
+# https://github.com/mrc-ide/mcstate/blob/da9f79e4b5dd421fd2e26b8b3d55c78735a29c27/vignettes/continuous.Rmd#L153
+# vignettes/continuous.Rmd
+mcmc2_sample <- mcstate::pmcmc_sample(pmcmc_tuned_run, 100)#1e3
 
+# We can visually check the chains have converged and assess the accuracy of our parameter estimates using a sample from the posterior distribution.
+par(mfrow = c(2, 2), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
+plot(pmcmc_tuned_run$pars[, "beta_0"], type = "l", xlab = "Iteration",
+     ylab = "beta_0")
+plot(pmcmc_tuned_run$pars[, "beta_1"], type = "l", xlab = "Iteration",
+     ylab = "beta_1")
+hist(mcmc2_sample$pars[, "beta_0"], main = "", xlab = expression(beta),
+     freq = FALSE)
+abline(v = 0.3, lty = 2, col = "darkred", lwd = 3)
+hist(mcmc2_sample$pars[, "beta_1"], main = "", xlab = "beta_1",
+     freq = FALSE)
+abline(v = 0.1, lty = 2, col = "darkred", lwd = 3)
+legend("topright", legend = "True value", col = "darkred", lty = 2, bty = "n")
 
+# We can compare our fitted trajectories to the prevalence data by sampling from the our comparison distribution to obtain an estimate of the number of positive tests under our model.
+state <- mcmc2_sample$trajectories$state
+
+# Prevalence basically Disease/N
+model_prev <-  t(y[4, , -1] / (y[2, , -1] + y[3, , -1] + y[4, , -1] + y[5, , -1]))
+modelled_positives <- apply(prevalence, 2, rbinom, n = nrow(incidence),
+                            size = incidence$cases) # size should be data$tested (but we don't have tested data (only positive data))
+
+# par(mfrow = c(1, 2), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
+# times <- c(0, incidence$day)
+# matplot(times, t(state[2, , ]), type = "l", lty = 1, col = cols["S"],
+#         ylim = c(0, max(state)), xlab = "Day", ylab = "Number of individuals")
+# matlines(times, t(state[5, , ]), lty = 1, col = cols["R"])
+# matlines(times, t(state[4, , ]), lty = 1, col = cols["I"])
+# legend("left", lwd = 1, col = cols[-4], legend = names(cols)[-4], bty = "n")
+
+par(mfrow = c(1, 1), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
+matplot(incidence$day, modelled_positives, type = "l", lty = 1, col = grey(0.7, 0.2),
+        xlab = "Day", ylab = "Number of positive tests")
+points(incidence$day, incidence$cases, pch = 20)
 
 
 ## 4. Running predictions
