@@ -23,15 +23,11 @@ setwd(wd)
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
-pars <- list(S_ini = 6e7, # England's pop size is roughly 67,000,000
-             A_ini = 100,
-             D_ini = 0,
-             time_shift = 71.88781655,
+pars <- list(# time_shift = 72, # time_shift is fixed
              beta_0 = 0.06565,
              beta_1 = 0.07,
-             log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
-             sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-             sigma_2 = (1) # FIXED estimated as acute phase
+             wane = 0.002,
+             log_delta = (-4.98) # will be fitted to logN(-5, 0.7)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
 sir_model <- gen_sir$new(pars = pars,
@@ -48,7 +44,7 @@ sir_model$update_state(pars = pars,
 
 # all_date <- incidence$day
 # all_date <- data.frame(col = integer(4745))
-n_times <- 4745 # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+n_times <- 4745*2 # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
 n_particles <- 15
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
@@ -202,7 +198,8 @@ legend("topleft", names(col_imD), fill = col_imD, bty = "n")
 # https://mrc-ide.github.io/mcstate/articles/sir_models.html
 
 incidence <- Natm_n_imD %>% 
-  select(day, counts_Ser1) %>% 
+  mutate(day_calibrated = day+(4745)) %>% 
+  select(day, day_calibrated, counts_Ser1) %>% 
   rename(cases = counts_Ser1) # That annoying name
 
 par(mar = c(5.1, 5.1, 0.5, 0.5), mgp = c(3.5, 1, 0), las = 1)
@@ -214,7 +211,7 @@ matplot(time, t(x[3, , ]), type = "l",
         xlab = "Time", ylab = "Number of individuals",
         col = cols[["D"]], lty = 1)#, ylim = max(x[2,,]))
 
-matlines(time, incidence$cases, type = "l", col = "steelblue")
+matlines(incidence$day_calibrated, incidence$cases, type = "l", col = "steelblue")
 
 # matlines(time, t(x[2, , ]), col = cols[["A"]], lty = 1)
 # matlines(time, t(x[3, , ]), col = cols[["D"]], lty = 1)
