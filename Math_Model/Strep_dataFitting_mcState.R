@@ -140,6 +140,10 @@ dt <- 1 # rate must be an integer; 0.25 to make it 4 days, I make it 1
 sir_data <- mcstate::particle_filter_data(data = incidence,
                                           time = "day",
                                           rate = 1 / dt)
+
+# Annotate the data so that it is suitable for the particle filter to use
+dat <- mcstate::particle_filter_data(incidence, "day", 4, 0)
+
 rmarkdown::paged_table(sir_data)
 # And ofc to make sure this is Strep's data:
 plot(incidence$day, incidence$cases, col = "deepskyblue3",
@@ -153,15 +157,12 @@ plot(incidence$day, incidence$cases, col = "deepskyblue3",
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # This is part of sir odin model:
-pars <- list(S_ini = 6e7, # England's pop size is roughly 67,000,000
-             A_ini = 100,
-             D_ini = 0,
-             time_shift = 71.88781655,
+pars <- list(time_shift = 72,
              beta_0 = 0.06565,
              beta_1 = 0.07,
-             log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
-             sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-             sigma_2 = (1) # FIXED estimated as acute phase
+             wane = 0.002,
+             log_delta = (-4.98), # will be fitted to logN(-7, 0.7)
+             sigma_2 = 1
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
 gen_sir$new(pars = pars,
@@ -176,7 +177,7 @@ y <- mod$simulate(c(0, sir_data$time_end))
 i <- mod$info()$index[["time"]]
 j <- mod$info()$index[["n_AD_daily"]]
 matplot(y[i, 1, ], t(y[j, , ]), type = "l", col = "maroon", lty = 1, las = 1,
-        xlab = "Day", ylab = "Cases")
+        xlab = "Day", ylab = "Cases", ylim = c(0, 10))
 points(cases ~ day, incidence, col = "deepskyblue3", pch = 19)
 
 index <- function(info) {
@@ -205,6 +206,30 @@ case_compare <- function(state, observed, pars = NULL) {
   dpois(x = incidence_observed, lambda = lamb, log = TRUE)
 }
 
+# That transform function
+# https://github.com/mrc-ide/mcstate/blob/da9f79e4b5dd421fd2e26b8b3d55c78735a29c27/tests/testthat/test-if2.R#L40
+# https://github.com/mrc-ide/mcstate/issues/184
+parameter_transform <- function(pars) {
+  time_shift <- pars[["time_shift"]]
+  beta_0 <- pars[["beta_0"]]
+  beta_1 <- pars[["beta_1"]]
+  wane <- pars[["wane"]]
+  log_delta <- pars[["log_delta"]]
+  sigma_2 <- pars[["sigma_2"]]
+  
+  list(time_shift = time_shift,
+       beta_0 = beta_0,
+       beta_1 = beta_1,
+       wane = wane,
+       log_delta = log_delta,
+       sigma_2 = sigma_2)
+}
+
+transform <- function(pars) {
+  parameter_transform(pars)
+}
+
+
 # If use SIR example the calculation below is not required:
 # incidence_compare <- function(state, prev_state, observed, pars = NULL) {
 #   exp_noise <- 1e6
@@ -215,7 +240,8 @@ case_compare <- function(state, observed, pars = NULL) {
 # }
 
 # Plot these along with the data
-# true_history seems like a simulated data consisting of SIR plus cases
+# true_history seems like a simulated data consisting of SIR plus daily cases, IN 2d MATRIX FORMAT
+# n_particles = 1
 # see: https://mrc-ide.github.io/mcstate/articles/restart.html
 
 # Imma create the file in odin based on beta and sigma, a basic SIR model, closed system,
@@ -223,71 +249,69 @@ case_compare <- function(state, observed, pars = NULL) {
 # transpose is not required because this is the output of sir.odin
 sir_model <- gen_sir$new(pars = pars,
                          time = 1,
-                         n_particles = 15L,
+                         n_particles = 1L,
                          n_threads = 4L,
                          seed = 1L)
 
-# # update_state is required "every single time" to run & produce matrix output (don't know why)
-# # sir_model$update_state(pars = pars,
-# time = 0) # make sure time is 0
-# 
-# all_date <- incidence$day
-# n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
-# n_particles <- 1
-# sir_output <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
-# 
-# for (t in seq_len(n_times)) {
-#   sir_output[ , , t] <- sir_model$run(t)
-# }
-# time <- sir_output[1, 1, ] # because in the position of [1, 1, ] is time
+# update_state is required "every single time" to run & produce matrix output (don't know why)
+sir_model$update_state(pars = pars,
+                       time = 0) # make sure time is 0
+
+all_date <- incidence$day
+n_times <- length(all_date) # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+n_particles <- 1 # n_particles refers to n_particles in sir_model (=1)
+sir_output <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
+
+for (t in seq_len(n_times)) { # seq(0:seq_len(n_times), 1) failed to run
+  sir_output[ , , t] <- sir_model$run(t)
+}
+time <- sir_output[1, 1, ] # because in the position of [1, 1, ] is time
 # sir_output <- sir_output[-1, , ] # compile all matrix into 1 huge df, delete time (position [-1, , ])
-# glimpse(sir_output)
-# 
-# 
-# # weird things happen here. true_history example:
-# # true_history <- readRDS("sir_true_history.rds")
-# # seems like they combine the SIR model output with n_SI_daily from the model,
-# # make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
-# # create a new matrix with initial state (t1 = 0)
-# begin_t0_value <- c(6e7, 0, 0, 0, 0, 0)  # Receall S_ini in Pars
-# # begin_t0 <- array(begin_t0_value, dim = c(5, 1, 1))
-# begin_t0 <- matrix(nrow = 6, ncol = 1, data = begin_t0_value)
-# 
-# # The sir_output with t1 = 1
-# chosen_output <- sir_output[1:6, ]
-# bindedMtx <- as.matrix(chosen_output)
-# 
-# # Combine
-# true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
-# true_history <- array(bindedMtx, dim = c(6, 1, length(all_date)+1))
-# glimpse(true_history)
-# # ori_history <- array(bindedMtx, dim = c(4, 1, length(all_date))) # 1-4 means S, I, R, n_SI_daily
-# # true_history <- array(c(begin_t0, ori_history), dim = c(dim(begin_t0)[1], dim(ori_history)[2], length(all_date)+1)) # 3-d matrices bind
-# 
-# 
-# 
-# 
-# # recall true_history
-# plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
-#   if (is.null(obs_end)) {
-#     obs_end <- max(times)
-#   }
-#   
-#   par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
-#   cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
-#   matplot(times, t(history[4, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
-#           xlab = "Time", ylab = "Number of individuals",
-#           col = cols[["D"]], lty = 1) #, ylim = range(history))
-#   # matlines(times, t(history[3, , -1]), col = cols[["A"]], lty = 1)
-#   # matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
-#   # matlines(times, t(history[5, , -1]), col = cols[["R"]], lty = 1)
-#   matpoints(times[1:obs_end], t(true_history[1:3, , -1]), pch = 1,
-#             col = "green")
-#   legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
-# }
+glimpse(sir_output)
+
+
+# weird things happen here. true_history example:
+# true_history <- readRDS("sir_true_history.rds")
+# seems like they combine the SIR model output with n_SI_daily from the model,
+# make them as a wide-type arrays with 4 rows (S,I,R,n_SI_daily)
+# create a new matrix with initial state (t1 = 0)
+begin_t0_value <- c(6e7, 0, 0, 0, 0, 0, 0)  # Recall S_ini in Pars
+# begin_t0 <- matrix(nrow = 7, ncol = 1, data = begin_t0_value)
+begin_t0 <- array(begin_t0_value, dim=c(7, 10, 1)) # check dim in glimpse(sir_output)
+
+# sir_output with t1 = 1 as a matrix
+chosen_output <- sir_output[1:7, , ]
+bindedMtx <- as.matrix(chosen_output)
+glimpse(bindedMtx)
+
+# Combine
+true_history <- cbind(begin_t0, bindedMtx) # create a 2D matrix and then change them into 3D:
+true_history <- array(bindedMtx, dim = c(7, 1, length(all_date)+1))
+glimpse(true_history)
+
+
+# recall true_history
+plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
+  if (is.null(obs_end)) {
+    obs_end <- max(times)
+  }
+
+  par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
+  cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
+  matplot(times, t(history[4, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
+          xlab = "Time", ylab = "Number of individuals",
+          col = cols[["D"]], lty = 1) #, ylim = range(history))
+  # matlines(times, t(history[3, , -1]), col = cols[["A"]], lty = 1)
+  # matlines(times, t(history[4, , -1]), col = cols[["D"]], lty = 1)
+  # matlines(times, t(history[5, , -1]), col = cols[["R"]], lty = 1)
+  matpoints(times[1:obs_end], t(true_history[2:4, , -1]), pch = 1,
+            col = "green")
+  legend("left", lwd = 1, col = cols, legend = names(cols), bty = "n")
+}
 
 # Inferring Parameters
 n_particles <- 500 # I increase the particles from 100 to 500
+
 filter <- mcstate::particle_filter$new(data = sir_data,
                                        model = gen_sir, # Changing gen_sir into sir_model (with updated parameters that I can control) produce error:
                                        # Error in initialize(...) : 'model' must be a dust_generator
@@ -298,19 +322,15 @@ filter <- mcstate::particle_filter$new(data = sir_data,
 # recall pars but dt = dt, and dt <- 1
 dt <- 1
 
-filter$run(save_history = TRUE, pars = list(S_ini = 6e7, # England's pop size is roughly 67,000,000
-                                            A_ini = 100,
-                                            D_ini = 0,
-                                            time_shift = 71.88781655,
+filter$run(save_history = TRUE, pars = list(time_shift = 72,
                                             beta_0 = 0.06565,
                                             beta_1 = 0.07,
-                                            log_delta = (-4.7), # will be fitted to logN(-5, 0.7)
-                                            sigma_1 = (1/15.75), # FIXED carriage duration of diseased = 15.75 days (95% CI 7.88-31.49) (Serotype 1) (Chaguza et al., 2021)
-                                            sigma_2 = (1) # FIXED estimated as acute phase
+                                            wane = 0.002,
+                                            log_delta = (-4.98) # will be fitted to logN(-5, 0.7)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 )
 
-# plot_particle_filter(filter$history(), true_history, incidence$day)
+plot_particle_filter(filter$history(), true_history, incidence$day)
 
 
 ## 3. MCMC Run #################################################################
@@ -328,25 +348,60 @@ filter$run(save_history = TRUE, pars = list(S_ini = 6e7, # England's pop size is
 # 1	0.019837434032008	0.007774465457634	0.057617171798831
 # 2 Dataset. Invasiveness estimates for serotypes in adults.
 # Serotype	
-# For this trial I use the mean number of invasiveness estimate:
-time_shift <- mcstate::pmcmc_parameter("time_shift", 72.5, min = 72, max = 73, prior = function(s)
-  dunif(s, min = 72, max = 73, log = TRUE)) # ~Uniform[72,73]
-beta_0 <- mcstate::pmcmc_parameter("beta_0", 0.06565, min = 0, max = 0.8, prior = function(q)
-  dgamma(q, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
-beta_1 <- mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, max = 0.8, prior = function(r)
-  dgamma(r, shape = 1, scale = 0.1, log = TRUE)) # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+# For this trial I use the mean number of invasiveness estimate: ((0.017369780939027+0.019837434032008)/2)/365 = 5.096879e-05 (Africa)
+# Multiplying hypothetical delta by UK_calibration: 0.8066608*5.096879e-05 = 4.111452e-05
+prepare_parameters <- function(initial_pars, priors, proposal, transform) {
+  
+  mcmc_pars <- mcstate::pmcmc_parameters$new(
+    list(mcstate::pmcmc_parameter("time_shift", 72.5, min = 1, max = 365,
+                                  prior = function(s) dunif(s, min = 1, max = 365, log = TRUE)), # ~Uniform[72,73]
+         mcstate::pmcmc_parameter("beta_0", 0.06565, min = 0, max = 0.8,
+                                  prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist)
+         mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, max = 0.8,
+                                  prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+         mcstate::pmcmc_parameter("wane", 0.002, min = 0, max = 0.8,
+                                  prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist
+         mcstate::pmcmc_parameter("log_delta", (-4.7), min = (-5), max = 0.7,
+                                  prior = function(s) dunif(s, min = (-7), max = 0.7, log = TRUE)), # logN distribution for children & adults (Lochen et al., 2022)
+         mcstate::pmcmc_parameter("sigma_2", 1, min = 0, max = 10,
+                                  prior = function(s) dgamma(s, shape = 1, scale = 1, log = TRUE)) # shape = 1 , scale = 1 to capture 5 days/more (or dgamma(2.5, 0.5))?
+    ),
+    proposal = proposal,
+    transform = transform)
+  
+}
 
-log_delta <- mcstate::pmcmc_parameter("log_delta", (-4.7), min = (-5), max = 0.7, prior = function(p)
-  dunif(p, min = (-5), max = 0.7, log = TRUE)) # logN distribution for children & adults (Lochen et al., 2022)
+prepare_priors <- function(pars){
+  priors <- list()
+  
+  priors$time_shift <- function(s) {
+    dunif(s, min = 1, max = 365, log = TRUE)
+  }
+  priors$beta_0 <- function(s) {
+    dgamma(s, shape = 1, scale = 0.1, log = TRUE)
+  }
+  priors$beta_1 <- function(s) {
+    dgamma(s, shape = 1, scale = 0.1, log = TRUE)
+  }
+  priors$wane <- function(s) {
+    dgamma(s, shape = 1, scale = 0.1, log = TRUE)
+  }
+  priors$log_delta <- function(s) {
+    dunif(s, min = (-7), max = 0.7, log = TRUE)
+  }
+  priors$sigma_2 <- function(s) {
+    dgamma(s, shape = 1, scale = 1, log = TRUE)
+  }
+}
 
-proposal_matrix <- diag(0.1, 4) # assumption no co-variance occur
-# proposal_matrix <- as.matrix(0.1)
-mcmc_pars <- mcstate::pmcmc_parameters$new(list(time_shift = time_shift,
-                                                beta_0 = beta_0,
-                                                beta_1 = beta_1,
-                                                log_delta = log_delta),
-                                           proposal_matrix)
+# Recall transform function
+priors <- prepare_priors(pars)
+# proposal_matrix <- diag(10, 6) # assumption no co-variance occur, variance in 10 days
+proposal_matrix <- matrix(30, nrow = 6, ncol = 6)
+rownames(proposal_matrix) <- c("time_shift", "beta_0", "beta_1", "wane", "log_delta", "sigma_2")
+colnames(proposal_matrix) <- c("time_shift", "beta_0", "beta_1", "wane", "log_delta", "sigma_2")
 
+mcmc_pars <- prepare_parameters(initial_pars = pars, priors = priors, proposal = proposal_matrix, transform = transform)
 
 n_steps <- 1000
 n_burnin <- n_steps/2
@@ -355,10 +410,10 @@ control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  rerun_every = 50,
+  # rerun_every = 50,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
-# plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
+plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
 
 processed_chains <- mcstate::pmcmc_thin(pmcmc_run, burnin = n_burnin, thin = 2)
 parameter_mean_hpd <- apply(processed_chains$pars, 2, mean)
@@ -371,35 +426,31 @@ plot(mcmc1)
 
 # Diagnostics TRIAL ############################################################
 # coz usually the first run is not efficient (in terms of effective sample size per iteration)
-print("pMCMC Effective Size & Rejection Rate")
+print("pMCMC Effective Size & Acceptance Rate")
 coda::effectiveSize(mcmc1)
 1 - coda::rejectionRate(mcmc1)
 
 # Autocorrelation plots
 # print("Autocorrelation of mcmc1?")
-par(mfrow = c(2,2))
-coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+
+# coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
 coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
 coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
+coda::acfplot(mcmc1[, "wane"], main = "Autocorrelation wane")
 coda::acfplot(mcmc1[, "log_delta"], main = "Autocorrelation log(delta)")
-par(mfrow = c(1,1))
+coda::acfplot(mcmc1[, "sigma_2"], main = "Autocorrelation sigma2")
+
 
 ## 3a. Tuning the pMCMC part 1 #################################################
 # Use the covariance of the state as the proposal matrix:
 proposal_matrix <- cov(pmcmc_run$pars)
-mcmc_pars <- mcstate::pmcmc_parameters$new(
-  list(time_shift = time_shift,
-       beta_0 = beta_0,
-       beta_1 = beta_1,
-       log_delta = log_delta),
-  proposal_matrix)
-proposal_matrix
+mcmc_pars <- prepare_parameters(initial_pars = pars, priors = priors, proposal = proposal_matrix, transform = transform)
 
 control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
-  rerun_every = 50,
+  # rerun_every = 50,
   progress = TRUE,
   n_chains = 4)
 pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
@@ -410,7 +461,7 @@ mcmc2 <- coda::as.mcmc(cbind(
 summary(mcmc2)
 plot(mcmc2)
 
-print("Tuning Result Effective Size & Rejection Rate of mcmc2")
+print("Tuning Result Effective Size & Acceptance Rate of mcmc2")
 coda::effectiveSize(mcmc2)
 1 - coda::rejectionRate(mcmc2)
 
@@ -466,7 +517,7 @@ library(bayesplot)
 library(gridExtra)
 # MCMC Pairs
 bayesplot::mcmc_pairs(mcmc_chains_list,
-                      pars = c("time_shift", "beta_0", "beta_1", "log_delta"),
+                      pars = c("beta_0", "beta_1", "wane", "log_delta", "sigma_2"),
                       off_diag_args = list(size = 0.75))
 
 bayesplot::mcmc_pairs(mcmc_chains_list,
@@ -505,10 +556,11 @@ beta_1_vs_log_delta + stat_density_2d(color = "black", size = .5)
 
 par(mfrow = c(1,1))
 
+
 # MCMC Divergence (re-sampling by using pmcmc_sample)
 # https://github.com/mrc-ide/mcstate/blob/da9f79e4b5dd421fd2e26b8b3d55c78735a29c27/vignettes/continuous.Rmd#L153
 # vignettes/continuous.Rmd
-mcmc2_sample <- mcstate::pmcmc_sample(pmcmc_tuned_run, 100)#1e3
+mcmc_sample <- mcstate::pmcmc_sample(pmcmc_tuned_run, 1e3)#1e3
 
 # We can visually check the chains have converged and assess the accuracy of our parameter estimates using a sample from the posterior distribution.
 par(mfrow = c(2, 2), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
@@ -516,20 +568,43 @@ plot(pmcmc_tuned_run$pars[, "beta_0"], type = "l", xlab = "Iteration",
      ylab = "beta_0")
 plot(pmcmc_tuned_run$pars[, "beta_1"], type = "l", xlab = "Iteration",
      ylab = "beta_1")
-hist(mcmc2_sample$pars[, "beta_0"], main = "", xlab = expression(beta),
+hist(mcmc_sample$pars[, "beta_0"], main = "beta 0", xlab = "beta_0",
      freq = FALSE)
-abline(v = 0.3, lty = 2, col = "darkred", lwd = 3)
-hist(mcmc2_sample$pars[, "beta_1"], main = "", xlab = "beta_1",
+abline(v = pars$beta_0, lty = 2, col = "darkred", lwd = 3)
+hist(mcmc_sample$pars[, "beta_1"], main = "beta 1", xlab = "beta_1",
      freq = FALSE)
-abline(v = 0.1, lty = 2, col = "darkred", lwd = 3)
-legend("topright", legend = "True value", col = "darkred", lty = 2, bty = "n")
+abline(v = pars$beta_1, lty = 2, col = "darkred", lwd = 3)
+legend("topright", legend = "Initial Value", col = "darkred", lty = 2, bty = "n")
+
+
+par(mfrow = c(2, 2), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
+plot(pmcmc_tuned_run$pars[, "wane"], type = "l", xlab = "Iteration",
+     ylab = "wane")
+plot(pmcmc_tuned_run$pars[, "log_delta"], type = "l", xlab = "Iteration",
+     ylab = "log_delta")
+hist(mcmc_sample$pars[, "wane"], main = "wane", xlab = "wane",
+     freq = FALSE)
+abline(v = pars$wane, lty = 2, col = "darkred", lwd = 3)
+hist(mcmc_sample$pars[, "log_delta"], main = "log(delta)", xlab = "log_delta",
+     freq = FALSE)
+abline(v = pars$log_delta, lty = 2, col = "darkred", lwd = 3)
+legend("topright", legend = "Initial Value", col = "darkred", lty = 2, bty = "n")
+
+par(mfrow = c(2, 1), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
+plot(pmcmc_tuned_run$pars[, "sigma_2"], type = "l", xlab = "Iteration",
+     ylab = "sigma_2")
+hist(mcmc_sample$pars[, "sigma_2"], main = "sigma_2", xlab = "sigma_2",
+     freq = FALSE)
+abline(v = pars$sigma_2, lty = 2, col = "darkred", lwd = 3)
+legend("topright", legend = "Initial Value", col = "darkred", lty = 2, bty = "n")
+par(mfrow = c(1, 1), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
 
 # We can compare our fitted trajectories to the prevalence data by sampling from the our comparison distribution to obtain an estimate of the number of positive tests under our model.
-state <- mcmc2_sample$trajectories$state
+state <- mcmc_sample$trajectories$state
 
 # Prevalence basically Disease/N
 model_prev <-  t(y[4, , -1] / (y[2, , -1] + y[3, , -1] + y[4, , -1] + y[5, , -1]))
-modelled_positives <- apply(prevalence, 2, rbinom, n = nrow(incidence),
+modelled_positives <- apply(model_prev, 2, rbinom, n = nrow(incidence),
                             size = incidence$cases) # size should be data$tested (but we don't have tested data (only positive data))
 
 # par(mfrow = c(1, 2), mar = c(3, 3, 1, 1), mgp = c(1.5, 0.5, 0), bty = "n")
@@ -545,5 +620,11 @@ matplot(incidence$day, modelled_positives, type = "l", lty = 1, col = grey(0.7, 
         xlab = "Day", ylab = "Number of positive tests")
 points(incidence$day, incidence$cases, pch = 20)
 
+# coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+coda::acfplot(mcmc2[, "beta_0"], main = "Autocorrelation beta0")
+coda::acfplot(mcmc2[, "beta_1"], main = "Autocorrelation beta1")
+coda::acfplot(mcmc2[, "wane"], main = "Autocorrelation wane")
+coda::acfplot(mcmc2[, "log_delta"], main = "Autocorrelation log(delta)")
+coda::acfplot(mcmc2[, "sigma_2"], main = "Autocorrelation sigma2")
 
 ## 4. Running predictions
