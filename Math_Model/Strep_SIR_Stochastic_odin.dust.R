@@ -1,33 +1,13 @@
-# A nice Intro & some examples:
-# https://github.com/mrc-ide/odin-dust-tutorial/
-# https://mrc-ide.github.io/odin.dust/articles/sir_models.html
-# https://mrc-ide.github.io/sircovid/
-
-if (!require(odin.dust, quietly=T)){
-  install.packages("odin.dust",
-                   repos = c("https://mrc-ide.r-universe.dev", "https://cloud.r-project.org"))
-  
-  library(odin.dust)
-}
-
-# This will be saved as 'sir_stochastic.R' and will be run by using library(odin.dust)
-# Set wd to the saved file or sir_stochastic.R:
-rm(list=ls())
-
-wd = "C:/Users/dac23/Documents/Downloads" # DIDE
-wd = "C:/Users/dac23/Downloads" # library computers
-wd = "/home/ron/Downloads" # personal OSs
-setwd(wd)
-
-
-gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # Running the SIR model with dust
-pars <- list(# time_shift = 72, # time_shift is fixed
+pars <- list(A_ini = 6e7*(2e-6), # S_ini*(2e-6) = 120 people, 
+             time_shift = 0.2,
              beta_0 = 0.06565,
              beta_1 = 0.07,
              wane = 0.002,
-             log_delta = (-4.98) # will be fitted to logN(-5, 0.7)
+             log_delta = (-4.98), # will be fitted to logN(-10, 0.7)
+             sigma_1 = (1/15.75),
+             sigma_2 = (1)
 ) # Serotype 1 is categorised to have the lowest carriage duration
 
 sir_model <- gen_sir$new(pars = pars,
@@ -44,7 +24,7 @@ sir_model$update_state(pars = pars,
 
 # all_date <- incidence$day
 # all_date <- data.frame(col = integer(4745))
-n_times <- 4745*2 # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
+n_times <- 4745 # 4745 or similar to the number of date range (of the provided data), or try 500 for trial
 n_particles <- 15
 x <- array(NA, dim = c(sir_model$info()$len, n_particles, n_times))
 
@@ -157,8 +137,8 @@ Natm_n_im <- full_join(Natm_n_i, Natm_nmeningitis,
 
 Natm_n_imD <- full_join(Natm_n_im, Natm_n30DDeath,
                         by = c("allDate" = "Earliest.specimen.date")) %>% 
-  replace(is.na(.), 0) %>% # NA means no data of meningitis or 30 days death, changed them to 0
-  glimpse()
+  replace(is.na(.), 0) #%>% # NA means no data of meningitis or 30 days death, changed them to 0
+  #glimpse()
 
 # Total population data by age, year for each region
 # SOURCE: https://www.nomisweb.co.uk/
@@ -198,7 +178,7 @@ legend("topleft", names(col_imD), fill = col_imD, bty = "n")
 # https://mrc-ide.github.io/mcstate/articles/sir_models.html
 
 incidence <- Natm_n_imD %>% 
-  mutate(day_calibrated = day+(4745)) %>% 
+  mutate(day_calibrated = day+(4745)) %>% # day_calibrated to simulate disease epidemic happens 13 years after the outbreak (4745*2)
   select(day, day_calibrated, counts_Ser1) %>% 
   rename(cases = counts_Ser1) # That annoying name
 
@@ -211,7 +191,7 @@ matplot(time, t(x[3, , ]), type = "l",
         xlab = "Time", ylab = "Number of individuals",
         col = cols[["D"]], lty = 1)#, ylim = max(x[2,,]))
 
-matlines(incidence$day_calibrated, incidence$cases, type = "l", col = "steelblue")
+matlines(incidence$day, incidence$cases, type = "l", col = "steelblue")
 
 # matlines(time, t(x[2, , ]), col = cols[["A"]], lty = 1)
 # matlines(time, t(x[3, , ]), col = cols[["D"]], lty = 1)
