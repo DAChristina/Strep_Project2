@@ -157,7 +157,8 @@ plot(incidence$day, incidence$cases, col = "deepskyblue3",
 gen_sir <- odin.dust::odin_dust("sir_stochastic.R")
 
 # This is part of sir odin model:
-pars <- list(time_shift = 72,
+pars <- list(A_ini = 6e7*(2e-6), # S_ini*(2e-6) = 120 people,
+             time_shift = 0.2,
              beta_0 = 0.06565,
              beta_1 = 0.07,
              wane = 0.002,
@@ -210,24 +211,14 @@ case_compare <- function(state, observed, pars = NULL) {
 # https://github.com/mrc-ide/mcstate/blob/da9f79e4b5dd421fd2e26b8b3d55c78735a29c27/tests/testthat/test-if2.R#L40
 # https://github.com/mrc-ide/mcstate/issues/184
 parameter_transform <- function(pars) {
-  time_shift <- pars[["time_shift"]]
-  beta_0 <- pars[["beta_0"]]
-  beta_1 <- pars[["beta_1"]]
-  wane <- pars[["wane"]]
-  log_delta <- pars[["log_delta"]]
-  sigma_2 <- pars[["sigma_2"]]
-  
-  list(time_shift = time_shift,
-       beta_0 = beta_0,
-       beta_1 = beta_1,
-       wane = wane,
-       log_delta = log_delta,
-       sigma_2 = sigma_2)
+  transform <- function(pars) {
+    pars <- as.list(pars)
+    pars
+  }
+  transform
 }
 
-transform <- function(pars) {
-  parameter_transform(pars)
-}
+transform <- parameter_transform(pars)
 
 
 # If use SIR example the calculation below is not required:
@@ -295,7 +286,7 @@ plot_particle_filter <- function(history, true_history, times, obs_end = NULL) {
   if (is.null(obs_end)) {
     obs_end <- max(times)
   }
-
+  
   par(mar = c(4.1, 5.1, 0.5, 0.5), las = 1)
   cols <- c(S = "#8c8cd9", A = "darkred", D = "#cc0099", R = "#999966", n_AD_daily = "orange", n_AD_cumul = "green")
   matplot(times, t(history[4, , -1]), type = "l", # I change history[2, , -1] becaue history[1, , -1] is time
@@ -322,11 +313,12 @@ filter <- mcstate::particle_filter$new(data = sir_data,
 # recall pars but dt = dt, and dt <- 1
 dt <- 1
 
-filter$run(save_history = TRUE, pars = list(time_shift = 72,
+filter$run(save_history = TRUE, pars = list(time_shift = 0.2,
                                             beta_0 = 0.06565,
                                             beta_1 = 0.07,
                                             wane = 0.002,
-                                            log_delta = (-4.98) # will be fitted to logN(-5, 0.7)
+                                            log_delta = (-4.98),
+                                            sigma_2 = 1
 ) # Serotype 1 is categorised to have the lowest carriage duration
 )
 
@@ -353,16 +345,16 @@ plot_particle_filter(filter$history(), true_history, incidence$day)
 prepare_parameters <- function(initial_pars, priors, proposal, transform) {
   
   mcmc_pars <- mcstate::pmcmc_parameters$new(
-    list(mcstate::pmcmc_parameter("time_shift", 72.5, min = 1, max = 365,
-                                  prior = function(s) dunif(s, min = 1, max = 365, log = TRUE)), # ~Uniform[72,73]
+    list(mcstate::pmcmc_parameter("time_shift", 0.2, min = 0, max = 1,
+                                  prior = function(s) dunif(s, min = 0, max = 1, log = TRUE)), # ~Uniform[0,1] in the proportion of 365 days
          mcstate::pmcmc_parameter("beta_0", 0.06565, min = 0, max = 0.8,
                                   prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist)
          mcstate::pmcmc_parameter("beta_1", 0.07, min = 0, max = 0.8,
                                   prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist
          mcstate::pmcmc_parameter("wane", 0.002, min = 0, max = 0.8,
                                   prior = function(s) dgamma(s, shape = 1, scale = 0.1, log = TRUE)), # draws from gamma distribution dgamma(1, 0.2) --> exp dist
-         mcstate::pmcmc_parameter("log_delta", (-4.7), min = (-5), max = 0.7,
-                                  prior = function(s) dunif(s, min = (-7), max = 0.7, log = TRUE)), # logN distribution for children & adults (Lochen et al., 2022)
+         mcstate::pmcmc_parameter("log_delta", (-4.7), min = (-10), max = 0.7,
+                                  prior = function(s) dunif(s, min = (-10), max = 0.7, log = TRUE)), # logN distribution for children & adults (Lochen et al., 2022)
          mcstate::pmcmc_parameter("sigma_2", 1, min = 0, max = 10,
                                   prior = function(s) dgamma(s, shape = 1, scale = 1, log = TRUE)) # shape = 1 , scale = 1 to capture 5 days/more (or dgamma(2.5, 0.5))?
     ),
@@ -375,7 +367,7 @@ prepare_priors <- function(pars){
   priors <- list()
   
   priors$time_shift <- function(s) {
-    dunif(s, min = 1, max = 365, log = TRUE)
+    dunif(s, min = 0, max = 1, log = TRUE)
   }
   priors$beta_0 <- function(s) {
     dgamma(s, shape = 1, scale = 0.1, log = TRUE)
@@ -387,32 +379,44 @@ prepare_priors <- function(pars){
     dgamma(s, shape = 1, scale = 0.1, log = TRUE)
   }
   priors$log_delta <- function(s) {
-    dunif(s, min = (-7), max = 0.7, log = TRUE)
+    dunif(s, min = (-10), max = 0.7, log = TRUE)
   }
   priors$sigma_2 <- function(s) {
     dgamma(s, shape = 1, scale = 1, log = TRUE)
   }
+  priors
 }
 
 # Recall transform function
 priors <- prepare_priors(pars)
-# proposal_matrix <- diag(10, 6) # assumption no co-variance occur, variance in 10 days
-proposal_matrix <- matrix(30, nrow = 6, ncol = 6)
+proposal_matrix <- diag(10, 6) # assumption no co-variance occur, variance in 10 days
+# proposal_matrix <- matrix(10, nrow = 6, ncol = 6)
 rownames(proposal_matrix) <- c("time_shift", "beta_0", "beta_1", "wane", "log_delta", "sigma_2")
 colnames(proposal_matrix) <- c("time_shift", "beta_0", "beta_1", "wane", "log_delta", "sigma_2")
 
 mcmc_pars <- prepare_parameters(initial_pars = pars, priors = priors, proposal = proposal_matrix, transform = transform)
 
-n_steps <- 1000
+n_steps <- 2000
 n_burnin <- n_steps/2
 
+# Parallelisation: https://mrc-ide.github.io/mcstate/articles/parallelisation.html
 control <- mcstate::pmcmc_control(
   n_steps,
+  n_chains = 4, # don't think I need n_chains right now
+  n_workers = 4, # parallel
+  n_threads_total = 16, # parallel, CPU cores (change ncpus in submit.pbs)
   save_state = TRUE,
   save_trajectories = TRUE,
   # rerun_every = 50,
   progress = TRUE)
 pmcmc_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
+# print("Print pmcmc_run")
+# pmcmc_run
+
+# Rewrite pmcmc_run as combined chains
+# pmcmc_run <- pmcmc_combine(pmcmc_run)
+# ERROR pmcmc_combine is not required; chains have already been combined
+
 plot_particle_filter(pmcmc_run$trajectories$state, true_history, incidence$day)
 
 processed_chains <- mcstate::pmcmc_thin(pmcmc_run, burnin = n_burnin, thin = 2)
@@ -433,7 +437,7 @@ coda::effectiveSize(mcmc1)
 # Autocorrelation plots
 # print("Autocorrelation of mcmc1?")
 
-# coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
 coda::acfplot(mcmc1[, "beta_0"], main = "Autocorrelation beta0")
 coda::acfplot(mcmc1[, "beta_1"], main = "Autocorrelation beta1")
 coda::acfplot(mcmc1[, "wane"], main = "Autocorrelation wane")
@@ -450,9 +454,11 @@ control <- mcstate::pmcmc_control(
   n_steps,
   save_state = TRUE,
   save_trajectories = TRUE,
+  n_chains = 4, # don't think I need n_chains right now
+  n_workers = 4, # parallel
+  n_threads_total = 16, # parallel, core
   # rerun_every = 50,
-  progress = TRUE,
-  n_chains = 4)
+  progress = TRUE)
 pmcmc_tuned_run <- mcstate::pmcmc(mcmc_pars, filter, control = control)
 
 mcmc2 <- coda::as.mcmc(cbind(
@@ -620,7 +626,7 @@ matplot(incidence$day, modelled_positives, type = "l", lty = 1, col = grey(0.7, 
         xlab = "Day", ylab = "Number of positive tests")
 points(incidence$day, incidence$cases, pch = 20)
 
-# coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
+coda::acfplot(mcmc1[, "time_shift"], main = "Autocorrelation time shift")
 coda::acfplot(mcmc2[, "beta_0"], main = "Autocorrelation beta0")
 coda::acfplot(mcmc2[, "beta_1"], main = "Autocorrelation beta1")
 coda::acfplot(mcmc2[, "wane"], main = "Autocorrelation wane")
@@ -628,3 +634,4 @@ coda::acfplot(mcmc2[, "log_delta"], main = "Autocorrelation log(delta)")
 coda::acfplot(mcmc2[, "sigma_2"], main = "Autocorrelation sigma2")
 
 ## 4. Running predictions
+
